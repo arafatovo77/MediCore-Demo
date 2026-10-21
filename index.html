@@ -313,6 +313,10 @@ tr:hover td{background:#f8fafc}
           <div class="field" style="align-self:flex-end"><button class="btn" id="btnQuickAdd" style="width:100%">Add</button></div>
         </div>
         <datalist id="medNameList"></datalist>
+        <div id="medStockPicker" style="margin-bottom:10px">
+          <button type="button" class="btn small secondary" id="btnStockPicker">📋 Pick from stock</button>
+          <div id="stockPickerList" style="display:none;max-height:230px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;margin-top:8px;background:#fff"></div>
+        </div>
         <div class="row" style="align-items:flex-end">
           <div class="field searchbar"><label>Search</label><input type="text" id="medSearch" placeholder="Search by name or generic…"></div>
           <div class="field" style="max-width:200px"><label>Stock</label><select id="medStockFilter"><option value="">All stock</option><option value="in">In stock</option><option value="low">Low stock</option><option value="out">Out of stock</option><option value="expired">Expired</option></select></div>
@@ -1446,20 +1450,64 @@ function medSuggestionFor(raw){
   }
   return null;
 }
-/* Populates the shared #medNameList datalist: the option VALUE is the
-   brand name (so picking one fills just the name), while the visible
-   text is "Brand — Generic" so typing either word filters to it. */
+/* Finds a medicine already in stock by exact name (case-insensitive).
+   Also accepts the datalist display form "Name — …" by matching the
+   part before the dash. Returns null when the name is not stocked. */
+function medInventoryFor(raw){
+  var v = (raw || "").trim().toLowerCase();
+  if(!v) return null;
+  var dash = v.indexOf(" — ");
+  var head = dash > -1 ? v.substring(0, dash).trim() : v;
+  for(var i = 0; i < DB.medicines.length; i++){
+    var n = (DB.medicines[i].name || "").toLowerCase();
+    if(n === v || n === head) return DB.medicines[i];
+  }
+  return null;
+}
+/* Populates the shared #medNameList datalist. Medicines already in
+   stock come FIRST: the option VALUE is the exact name (so picking
+   one fills just the name), while the visible text is
+   "Name — <price> · Stock <qty>" so the current price and stock show
+   while choosing. The built-in brand suggestions follow
+   ("Brand — Generic"), skipping any name already in stock.
+   Refreshed from renderPharmacy(), so adds, restocks and dispenses
+   keep the list current without a reload. */
 function fillMedNameList(){
   var dl = el("medNameList"); if(!dl) return;
-  dl.innerHTML = MED_SUGGESTIONS.map(function(s){
-    return '<option value="' + esc(s.name) + '">' + esc(s.name) + " — " + esc(s.generic) + "</option>";
-  }).join("");
+  var seen = {}, parts = [];
+  DB.medicines.forEach(function(m){
+    var key = (m.name || "").trim().toLowerCase();
+    if(!key || seen[key]) return; seen[key] = 1;
+    parts.push('<option value="' + esc(m.name) + '">' + esc(m.name) + " — " + esc(money(m.price)) + " · Stock " + (Number(m.qty) || 0) + "</option>");
+  });
+  MED_SUGGESTIONS.forEach(function(s){
+    var key = s.name.toLowerCase();
+    if(seen[key]) return; seen[key] = 1;
+    parts.push('<option value="' + esc(s.name) + '">' + esc(s.name) + " — " + esc(s.generic) + "</option>");
+  });
+  dl.innerHTML = parts.join("");
 }
-/* On commit (change/blur) of a medicine name input: if it matches a
-   known brand, canonicalise the name, and for the full form also fill
-   the Generic field. Unknown names are left exactly as typed. */
+/* On commit (change/blur) of a medicine name input:
+   - a name already in stock canonicalises and fills the recorded
+     prices (quick-add: Sell Price; modal: Generic + Sell + Buy Price);
+   - a known brand suggestion canonicalises, and for the full form
+     also fills the Generic field;
+   - anything else is left exactly as typed, so a price the user typed
+     by hand is never overwritten by a non-matching name. */
 function applyMedSuggestion(input){
   if(!input) return;
+  var inv = medInventoryFor(input.value);
+  if(inv){
+    input.value = inv.name;
+    if(input.id === "qaName"){
+      var qp = el("qaPrice"); if(qp) qp.value = inv.price;
+    } else if(input.id === "f_mName"){
+      var ig = el("f_mGeneric"); if(ig) ig.value = inv.generic || "";
+      var sp = el("f_mPrice"); if(sp) sp.value = inv.price;
+      var cp = el("f_mCost"); if(cp) cp.value = (inv.costPrice === "" || inv.costPrice == null) ? "" : inv.costPrice;
+    }
+    return;
+  }
   var s = medSuggestionFor(input.value);
   if(!s) return;
   input.value = s.name;
@@ -1467,6 +1515,37 @@ function applyMedSuggestion(input){
     var g = el("f_mGeneric");
     if(g) g.value = s.generic;
   }
+}
+/* Stock picker: a tappable list for touch screens, where the datalist
+   dropdown is awkward. It sits with the quick-add bar, so it shares
+   that bar's pharmacy.write visibility, and it is hidden entirely
+   when nothing is in stock. Rows are rebuilt from renderPharmacy(). */
+function renderStockPicker(){
+  var wrap = el("medStockPicker"); if(!wrap) return;
+  var show = can("pharmacy.write") && DB.medicines.length > 0;
+  wrap.style.display = show ? "" : "none";
+  if(!show) return;
+  var list = el("stockPickerList"); if(!list) return;
+  list.innerHTML = DB.medicines.map(function(m){
+    var badge = "";
+    if(isExpired(m)) badge = ' <span class="badge b-exp">Expired</span>';
+    else if(isLowStock(m)) badge = ' <span class="badge b-low">Low stock</span>';
+    return '<div onclick="pickStockMed(\'' + m.id + '\')" style="padding:9px 12px;border-bottom:1px solid var(--line);cursor:pointer">' +
+      "<b>" + esc(m.name) + "</b> — " + esc(money(m.price)) + " · Stock " + (Number(m.qty) || 0) + badge + "</div>";
+  }).join("");
+}
+function toggleStockPicker(){
+  var list = el("stockPickerList"); if(!list) return;
+  list.style.display = (list.style.display === "none") ? "" : "none";
+}
+/* Tapping a stock row fills the quick-add name and sell price, then
+   moves focus to Quantity so the amount can be typed straight away. */
+function pickStockMed(id){
+  var m = findById(DB.medicines, id); if(!m) return;
+  var n = el("qaName"); if(n) n.value = m.name;
+  var p = el("qaPrice"); if(p) p.value = m.price;
+  var list = el("stockPickerList"); if(list) list.style.display = "none";
+  var q = el("qaQty"); if(q) q.focus();
 }
 function medFormHTML(m){
   m = m || {};
@@ -1486,7 +1565,21 @@ function saveMedForm(existing){
   var data = { name:name, generic:fieldVal("f_mGeneric"), qty:Number(fieldVal("f_mQty"))||0,
                price:round2(fieldVal("f_mPrice")), costPrice:(costRaw === "" ? "" : round2(costRaw)), expiry:fieldVal("f_mExpiry") };
   if(existing){ Object.assign(existing, data); }
-  else { data.id = CONFIG.ID_PREFIXES.med + (DB.counters.med++); DB.medicines.push(data); }
+  else {
+    /* Add mode only: a name that is already stocked RESTOCKS that
+       record instead of creating a duplicate row — the form quantity
+       is added to its stock, the form's generic and prices win (it is
+       a full form), and the expiry is replaced only when a date is
+       set. Editing an existing record (above) never merges. */
+    var dup = medInventoryFor(name);
+    if(dup){
+      dup.qty = (Number(dup.qty) || 0) + (Number(data.qty) || 0);
+      dup.generic = data.generic; dup.price = data.price; dup.costPrice = data.costPrice;
+      if(data.expiry) dup.expiry = data.expiry;
+      alert(dup.name + " is already in stock — the quantity has been added to its existing stock (restocked) instead of creating a duplicate.");
+    }
+    else { data.id = CONFIG.ID_PREFIXES.med + (DB.counters.med++); DB.medicines.push(data); }
+  }
   saveDB(); return true;
 }
 /* Opens the Add Medicine modal. Alongside the usual Save (which closes),
@@ -1504,13 +1597,18 @@ function openAddMedModal(){
    and stored empty, which isExpired()/medStockState() treat as "no
    expiry set" (never as expired). If the name matches a known brand
    suggestion, its generic is stored too; otherwise the generic can be
-   filled in later via Edit. */
+   filled in later via Edit. Typing a name that is already in stock
+   RESTOCKS that record instead of adding a duplicate row (see below). */
 function quickAddMed(){
   if(!requirePerm("pharmacy.write")) return;
   var name = fieldVal("qaName");
   if(!name){ alert("Medicine name is required."); el("qaName").focus(); return; }
+  /* A name already in stock merges into that record, so on the merge
+     path the price fields are optional: blank keeps the recorded one. */
+  var existing = medInventoryFor(name);
   var priceRaw = fieldVal("qaPrice"), qtyRaw = fieldVal("qaQty");
-  if(priceRaw === "" || isNaN(Number(priceRaw)) || Number(priceRaw) < 0){ alert("Unit price is required."); el("qaPrice").focus(); return; }
+  if(priceRaw === "" && !existing){ alert("Unit price is required."); el("qaPrice").focus(); return; }
+  if(priceRaw !== "" && (isNaN(Number(priceRaw)) || Number(priceRaw) < 0)){ alert("Unit price must be a valid number."); el("qaPrice").focus(); return; }
   if(qtyRaw === "" || isNaN(Number(qtyRaw)) || Number(qtyRaw) < 1){ alert("Quantity is required."); el("qaQty").focus(); return; }
   var expiry = fieldVal("qaExpiry");
   if(expiry && !/^\d{4}-\d{2}-\d{2}$/.test(expiry)){ alert("Expiry must be a valid date."); el("qaExpiry").focus(); return; }
@@ -1521,15 +1619,26 @@ function quickAddMed(){
     if(isNaN(Number(costRaw)) || Number(costRaw) < 0){ alert("Buy price must be a valid number."); el("qaCost").focus(); return; }
     costPrice = round2(costRaw);
   }
-  /* A recognised brand name brings its generic with it. */
-  var sug = medSuggestionFor(name);
-  DB.medicines.push({ id: CONFIG.ID_PREFIXES.med + (DB.counters.med++), name: sug ? sug.name : name, generic: sug ? sug.generic : "",
-                      qty: Math.floor(Number(qtyRaw)), price: round2(priceRaw), costPrice: costPrice, expiry: expiry });
+  if(existing){
+    /* Restock-merge: the quantity is added to the current stock (like
+       the Restock button); the expiry is replaced only when a new one
+       was typed; the sell and buy prices change only when typed. */
+    existing.qty = (Number(existing.qty) || 0) + Math.floor(Number(qtyRaw));
+    if(priceRaw !== "") existing.price = round2(priceRaw);
+    if(costRaw !== "") existing.costPrice = costPrice;
+    if(expiry) existing.expiry = expiry;
+  }
+  else {
+    /* A recognised brand name brings its generic with it. */
+    var sug = medSuggestionFor(name);
+    DB.medicines.push({ id: CONFIG.ID_PREFIXES.med + (DB.counters.med++), name: sug ? sug.name : name, generic: sug ? sug.generic : "",
+                        qty: Math.floor(Number(qtyRaw)), price: round2(priceRaw), costPrice: costPrice, expiry: expiry });
+  }
   saveDB(); renderAll();
   el("qaName").value = ""; el("qaPrice").value = ""; el("qaCost").value = ""; el("qaQty").value = ""; el("qaExpiry").value = "";
   el("qaName").focus();
   var b = el("btnQuickAdd");
-  if(b){ var t = b.textContent; b.textContent = "Added ✓"; setTimeout(function(){ b.textContent = t; }, 1200); }
+  if(b){ var t = b.textContent; b.textContent = existing ? "Restocked ✓" : "Added ✓"; setTimeout(function(){ b.textContent = t; }, 1200); }
 }
 /* Restock: adds newly received units to the current stock (it never
    replaces the quantity). The expiry is replaced only when a new date
@@ -1566,6 +1675,7 @@ function renderPharmacy(){
       '<button class="btn small secondary" onclick="editMed(\'' + m.id + '\')">Edit</button>' +
       '<button class="btn small danger" onclick="deleteMed(\'' + m.id + '\')">Delete</button></div>' : '<span class="muted small-txt">View only</span>') + "</td></tr>";
   }).join("") : '<tr><td colspan="9" class="empty">' + (DB.medicines.length ? "No matching records." : "No medicines in stock yet.") + "</td></tr>";
+  fillMedNameList(); renderStockPicker();
 }
 function editMed(id){
   if(!requirePerm("pharmacy.write")) return;
@@ -1912,6 +2022,7 @@ function init(){
   el("modalAlt").addEventListener("click", function(){ if(modalOnAlt) modalOnAlt(); });
   el("btnAddMed").addEventListener("click", openAddMedModal);
   el("btnQuickAdd").addEventListener("click", quickAddMed);
+  el("btnStockPicker").addEventListener("click", toggleStockPicker);
   ["qaName", "qaPrice", "qaCost", "qaQty", "qaExpiry"].forEach(function(fid){
     el(fid).addEventListener("keydown", function(e){ if(e.key === "Enter"){ e.preventDefault(); quickAddMed(); } });
   });
