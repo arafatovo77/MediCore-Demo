@@ -322,7 +322,7 @@ tr:hover td{background:#f8fafc}
 
     <!-- REPORTS -->
     <section class="section" id="sec-reports">
-      <div class="sec-head"><div><h2>Reports</h2><p>Collections and activity summaries.</p></div></div>
+      <div class="sec-head"><div><h2>Reports</h2><p id="repSubtitle">Collections and activity summaries.</p></div></div>
       <div class="card"><h3>Daily Collection (last 14 days)</h3>
         <div class="table-wrap"><table><thead><tr><th>Date</th><th>Invoice Payments</th><th>Pharmacy Sales</th><th>Total Collection</th></tr></thead>
         <tbody id="repDailyBody"></tbody></table></div></div>
@@ -347,6 +347,7 @@ tr:hover td{background:#f8fafc}
         <div class="field"><label>Address</label><input type="text" id="setAddress"></div>
         <div class="row">
           <div class="field"><label>Phone</label><input type="text" id="setPhone"></div>
+          <div class="field"><label>Country</label><select id="setCountry"><option value="">— Select country —</option></select></div>
           <div class="field"><label>Currency Symbol</label><input type="text" id="setCurrency" maxlength="3"></div>
         </div>
         <button class="btn" id="btnSaveSettings">Save Settings</button>
@@ -423,7 +424,7 @@ function defaultDB(){
   return {
     patients: [], doctors: [], appointments: [], invoices: [],
     medicines: [], labTests: [], labOrders: [], dispenses: [],
-    settings: { clinicName: "MediCore Demo Clinic", address: "123 Wellness Avenue", phone: "+1 555 010 2233", currency: "$" },
+    settings: { clinicName: "MediCore Demo Clinic", address: "123 Wellness Avenue", phone: "+1 555 010 2233", currency: "$", country: "", currencyCode: "" },
     users: [],
     counters: Object.assign({}, CONFIG.COUNTER_STARTS)
   };
@@ -439,6 +440,10 @@ function loadDB(){
     if(!Array.isArray(DB.users)) DB.users = [];
     if(!DB.counters) DB.counters = defaultDB().counters;
     if(!DB.counters.user) DB.counters.user = DB.users.length + 1;
+    /* Databases saved before the country presets have no country /
+       currencyCode in settings — default them to "not chosen". */
+    if(!DB.settings.country) DB.settings.country = "";
+    if(!DB.settings.currencyCode) DB.settings.currencyCode = "";
   }catch(e){ /* corrupted storage -> keep defaults */ }
 }
 function saveDB(){ if(store){ try{ store.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){} } }
@@ -1141,6 +1146,7 @@ function deleteInvoice(id){
 function printHeader(title){
   var s = DB.settings;
   return '<div class="p-head"><h1>' + esc(s.clinicName) + "</h1><p>" + esc(s.address) + " · Phone: " + esc(s.phone) +
+         (s.currencyCode ? " · Currency: " + esc(s.currencyCode) : "") +
          '</p><h3 style="margin-top:6px">' + esc(title) + "</h3></div>";
 }
 function doPrint(html){ el("printArea").innerHTML = html; window.print(); }
@@ -1295,6 +1301,8 @@ function printLabReport(id){
 
 /* ---------------- Reports ---------------- */
 function renderReports(){
+  var sub = el("repSubtitle");
+  if(sub) sub.textContent = "Collections and activity summaries." + (DB.settings.currencyCode ? " All amounts in " + DB.settings.currencyCode + "." : "");
   var daily = "", i, d, c;
   for(i=0;i<14;i++){
     d = new Date(); d.setDate(d.getDate()-i);
@@ -1325,11 +1333,59 @@ function renderReports(){
   }).join("") : '<tr><td colspan="3" class="empty">No dispensing recorded yet.</td></tr>';
 }
 
+/* ---------------- Country → currency presets ----------------
+   Choosing a country in Settings fills the Currency Symbol field with
+   that country's symbol; when Settings are saved, the country name and
+   its ISO code are stored in settings.country / settings.currencyCode
+   alongside the symbol (settings.currency). The symbol field stays
+   editable: editing it by hand after choosing a country simply
+   overrides the symbol — country / currencyCode keep the last chosen
+   country's values until another country is picked (or the selection
+   is cleared, which clears both on the next save). */
+var COUNTRY_CURRENCIES = [
+  { country: "Bangladesh",         symbol: "৳",   code: "BDT" },
+  { country: "India",              symbol: "₹",   code: "INR" },
+  { country: "Pakistan",           symbol: "Rs",  code: "PKR" },
+  { country: "Nepal",              symbol: "Rs",  code: "NPR" },
+  { country: "Sri Lanka",          symbol: "Rs",  code: "LKR" },
+  { country: "Saudi Arabia",       symbol: "SAR", code: "SAR" },
+  { country: "United Arab Emirates", symbol: "AED", code: "AED" },
+  { country: "Qatar",              symbol: "QAR", code: "QAR" },
+  { country: "Kuwait",             symbol: "KWD", code: "KWD" },
+  { country: "Malaysia",           symbol: "RM",  code: "MYR" },
+  { country: "United States",      symbol: "$",   code: "USD" },
+  { country: "United Kingdom",     symbol: "£",   code: "GBP" },
+  { country: "Eurozone",           symbol: "€",   code: "EUR" },
+  { country: "Canada",             symbol: "$",   code: "CAD" },
+  { country: "Australia",          symbol: "$",   code: "AUD" },
+  { country: "Singapore",          symbol: "$",   code: "SGD" }
+];
+function countryPreset(name){
+  for(var i=0;i<COUNTRY_CURRENCIES.length;i++){ if(COUNTRY_CURRENCIES[i].country === name) return COUNTRY_CURRENCIES[i]; }
+  return null;
+}
+function fillCountryOptions(){
+  var sel = el("setCountry"); if(!sel || !sel.options || sel.options.length > 1) return;
+  COUNTRY_CURRENCIES.forEach(function(p){
+    var o = document.createElement("option");
+    o.value = p.country; o.textContent = p.country + " (" + p.code + ")";
+    sel.appendChild(o);
+  });
+}
+/* Country dropdown changed: fill the symbol field from the preset.
+   Nothing is stored until "Save Settings" is clicked. */
+function applyCountryPreset(){
+  var p = countryPreset(fieldVal("setCountry"));
+  if(p) el("setCurrency").value = p.symbol;
+}
+
 /* ---------------- Settings ---------------- */
 function renderSettings(){
   el("setClinicName").value = DB.settings.clinicName || "";
   el("setAddress").value = DB.settings.address || "";
   el("setPhone").value = DB.settings.phone || "";
+  fillCountryOptions();
+  el("setCountry").value = DB.settings.country || "";
   el("setCurrency").value = DB.settings.currency || "$";
 }
 function saveSettings(){
@@ -1338,6 +1394,9 @@ function saveSettings(){
   DB.settings.address = fieldVal("setAddress");
   DB.settings.phone = fieldVal("setPhone");
   DB.settings.currency = fieldVal("setCurrency") || "$";
+  var preset = countryPreset(fieldVal("setCountry"));
+  DB.settings.country = preset ? preset.country : "";
+  DB.settings.currencyCode = preset ? preset.code : "";
   saveDB(); renderAll();
   el("settingsSaved").textContent = "Saved ✓";
 }
@@ -1443,6 +1502,7 @@ function init(){
   el("btnAddTest").addEventListener("click", function(){ if(!requirePerm("lab.write")) return; openModal("Add Lab Test", testFormHTML(null), function(){ if(saveTestForm(null)){ closeModal(); renderAll(); } }); });
   el("btnOrderTest").addEventListener("click", orderTest);
   el("btnSaveSettings").addEventListener("click", saveSettings);
+  el("setCountry").addEventListener("change", applyCountryPreset);
   el("btnLoadDemo").addEventListener("click", loadDemoData);
   el("btnResetData").addEventListener("click", resetAllData);
   /* Auth wiring */
