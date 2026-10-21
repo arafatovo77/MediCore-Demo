@@ -68,6 +68,7 @@ tr:hover td{background:#f8fafc}
 .actions{display:flex;gap:6px;flex-wrap:wrap}
 .muted{color:var(--muted)} .small-txt{font-size:12px}
 .alert-item{padding:8px 10px;border:1px solid #fecaca;background:#fef2f2;border-radius:8px;margin-bottom:7px;font-size:13px}
+.demo-banner{display:none;background:#fef3c7;border:1px solid #f59e0b;color:#92400e;border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:14px}
 .empty{padding:18px;text-align:center;color:var(--muted)}
 .searchbar{max-width:320px}
 .inline-form{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:16px}
@@ -171,11 +172,14 @@ tr:hover td{background:#f8fafc}
       <div>Signed in as <b id="currentUserName">—</b><span class="role-badge" id="currentUserRole">—</span></div>
       <button class="btn small secondary" id="btnLogout" style="margin-top:8px">Logout</button>
     </div>
-    <div class="side-foot">MediCore v1.2 · Works offline<br>Data stays in this browser.</div>
+    <div class="side-foot">MediCore v1.3 · Works offline<br>Data stays in this browser.</div>
   </aside>
 
   <!-- ============ MAIN ============ -->
   <main class="main">
+
+    <!-- DEMO MODE banner: visible while any demo sample account exists -->
+    <div class="demo-banner" id="demoBanner"><b>DEMO MODE</b> — sample accounts are active (see login screen for demo credentials). Delete the demo accounts in Settings before entering real data.</div>
 
     <!-- DASHBOARD -->
     <section class="section active" id="sec-dashboard">
@@ -364,7 +368,7 @@ tr:hover td{background:#f8fafc}
         </div>
         <button class="btn" id="btnAddUser">Add User</button>
         <span class="small-txt muted" id="userMsg" style="margin-left:10px"></span>
-        <p class="small-txt muted" style="margin-top:10px">Demo accounts (created by “Load Demo Data” / “Explore the demo”): admin / admin123 · reception / reception123 · pharmacy / pharma123 · lab / labtech123 — reset these passwords before real use.</p>
+        <p class="small-txt muted" style="margin-top:10px">Demo accounts (created only by “Load Demo Data” / “Explore the demo”): admin / admin123 · reception / reception123 · pharmacy / pharma123 · lab / labtech123 — delete these accounts before real use; a DEMO MODE banner stays visible in the app while any of them exists.</p>
       </div>
       <div class="card">
         <h3>Demo &amp; Data</h3>
@@ -374,7 +378,7 @@ tr:hover td{background:#f8fafc}
       </div>
       <div class="card">
         <h3>About MediCore</h3>
-        <p class="small-txt muted">MediCore v1.2 — a single-file clinic &amp; hospital management system with user login and role-based access control. No server, no internet and no installation required: open this file in any modern browser. Figures are estimates for management use; always verify critical records.</p>
+        <p class="small-txt muted">MediCore v1.3 — a single-file clinic &amp; hospital management system with user login and role-based access control. It ships with no default accounts — the first Admin account is created on first run, and demo accounts exist only if you explicitly load the demo. No server, no internet and no installation required: open this file in any modern browser. Figures are estimates for management use; always verify critical records.</p>
       </div>
     </section>
 
@@ -403,8 +407,17 @@ tr:hover td{background:#f8fafc}
    All data lives in the browser's localStorage. No server needed.
    v1.2 adds local user accounts with role-based access control —
    see the AUTH section below (PERMS matrix + requirePerm guards).
+   v1.3: the app ships with NO default accounts. Demo accounts live
+   only in the DEMO MODE section (hashes only, created on explicit
+   user action) and trigger an in-app DEMO MODE banner.
    ================================================================ */
-var LS_KEY = "medicore_db_v1";
+/* Central configuration: storage keys and ID generation. */
+const STORAGE_KEYS = { DB: "medicore_db_v1", SESSION: "medicore_session_v1" };
+const CONFIG = {
+  ID_PREFIXES:    { patient: "P-", doctor: "D-", appt: "A-", invoice: "INV-", med: "M-", test: "LT-", order: "LO-", dispense: "S-", user: "U-" },
+  COUNTER_STARTS: { patient: 1001, doctor: 101, appt: 1, invoice: 5001, med: 1, test: 1, order: 1, dispense: 1, user: 1 }
+};
+var LS_KEY = STORAGE_KEYS.DB;
 var store = (typeof localStorage !== "undefined") ? localStorage : null;
 
 function defaultDB(){
@@ -413,7 +426,7 @@ function defaultDB(){
     medicines: [], labTests: [], labOrders: [], dispenses: [],
     settings: { clinicName: "MediCore Demo Clinic", address: "123 Wellness Avenue", phone: "+1 555 010 2233", currency: "$" },
     users: [],
-    counters: { patient: 1001, doctor: 101, appt: 1, invoice: 5001, med: 1, test: 1, order: 1, dispense: 1, user: 1 }
+    counters: Object.assign({}, CONFIG.COUNTER_STARTS)
   };
 }
 var DB = defaultDB();
@@ -488,7 +501,7 @@ function collectionFor(dateFrom, dateTo){
    - Every mutating handler in this file starts with a requirePerm()
      guard, and renderers hide/disable controls the role may not use.
    ================================================================ */
-var SESSION_KEY = "medicore_session_v1";
+var SESSION_KEY = STORAGE_KEYS.SESSION;
 var ROLES = ["Admin", "Receptionist", "Pharmacist", "Lab Technician"];
 
 /* Permission matrix. "write" permissions cover create/update/delete for
@@ -614,24 +627,44 @@ function requirePerm(perm){
   return false;
 }
 
-/* ---- Demo accounts (created by Load Demo Data / Explore the demo) ---- */
-var DEMO_USERS = [
-  { username: "admin",     password: "admin123",     role: "Admin" },
-  { username: "reception", password: "reception123", role: "Receptionist" },
-  { username: "pharmacy",  password: "pharma123",    role: "Pharmacist" },
-  { username: "lab",       password: "labtech123",   role: "Lab Technician" }
+/* ===== DEMO MODE — sample accounts for evaluation only =====
+   MediCore ships with NO default accounts: DB.users starts empty and
+   the first account is created by the buyer in the first-run setup.
+
+   The four accounts below are SAMPLE ACCOUNTS FOR EVALUATION ONLY.
+   They are NOT production credentials. They are created ONLY when a
+   person explicitly chooses "Explore the demo" on the sign-in screen
+   (or an Admin runs "Load Demo Data" in Settings), so a prospective
+   user can try every role. Only the SHA-256 hashes of the well-known
+   demo passwords are stored here — never the plain passwords. Delete
+   the demo accounts in Settings → User Accounts before entering real
+   data; while any of them exists, the app shows a DEMO MODE banner.
+   =============================================================== */
+const DEMO_USERS = [
+  { username: "admin",     passHash: "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9", role: "Admin" },
+  { username: "reception", passHash: "5145dba3b6bda2d610d2c5c435a1c2481eefd3146b6a7e004ad73f794386e031", role: "Receptionist" },
+  { username: "pharmacy",  passHash: "1c7d7f2a7668a1de0ea8f04a0ce6ff072e14781b052c51ee506a41b05d28b5cb", role: "Pharmacist" },
+  { username: "lab",       passHash: "d81968c60a8a41bdafcb3c5825bf8bc4a76dccc932d673e3f9a7b71ce4538596", role: "Lab Technician" }
 ];
+/* True while at least one demo sample account still exists in DB.users. */
+function demoModeActive(){
+  return DEMO_USERS.some(function(d){ return !!findUser(d.username); });
+}
+/* Creates any missing demo accounts from DEMO_USERS (hashes are
+   precomputed constants, so no password handling happens here). */
 function ensureDemoUsers(){
   var missing = DEMO_USERS.filter(function(d){ return !findUser(d.username); });
   if(!missing.length) return Promise.resolve(false);
-  return Promise.all(missing.map(function(d){
-    return hashPassword(d.password).then(function(h){
-      return { id: "U-" + (DB.counters.user++), username: d.username, passHash: h, role: d.role, createdAt: todayStr() };
-    });
-  })).then(function(newUsers){
-    newUsers.forEach(function(u){ DB.users.push(u); });
-    saveDB(); return true;
+  missing.forEach(function(d){
+    DB.users.push({ id: CONFIG.ID_PREFIXES.user + (DB.counters.user++), username: d.username, passHash: d.passHash, role: d.role, createdAt: todayStr() });
   });
+  saveDB();
+  return Promise.resolve(true);
+}
+/* Shows/hides the DEMO MODE banner at the top of the app. */
+function renderDemoBanner(){
+  var b = el("demoBanner"); if(!b) return;
+  b.style.display = demoModeActive() ? "block" : "none";
 }
 
 /* ---------------- DOM layer ---------------- */
@@ -659,6 +692,7 @@ function showSection(name){
   renderAll();
 }
 function renderAll(){
+  renderDemoBanner();
   renderBrand(); renderDashboard(); renderPatients(); renderDoctors();
   fillBookingSelects(); renderAppointments(); renderBilling();
   renderPharmacy(); renderLab(); renderReports(); renderSettings(); renderUsers();
@@ -702,7 +736,7 @@ function submitSetup(){
   if(pw.length < 6){ authError("setupError", "Password must be at least 6 characters."); return; }
   if(pw !== pw2){ authError("setupError", "The two passwords do not match."); return; }
   hashPassword(pw).then(function(h){
-    DB.users.push({ id: "U-" + (DB.counters.user++), username: username, passHash: h, role: "Admin", createdAt: todayStr() });
+    DB.users.push({ id: CONFIG.ID_PREFIXES.user + (DB.counters.user++), username: username, passHash: h, role: "Admin", createdAt: todayStr() });
     saveDB();
     setSession(username, "Admin");
     el("setupPassword").value = ""; el("setupPassword2").value = "";
@@ -784,7 +818,7 @@ function addUserFromForm(){
   if(pw.length < 6){ msg.textContent = "Password must be at least 6 characters."; return; }
   if(findUser(username)){ msg.textContent = "That username is already taken."; return; }
   hashPassword(pw).then(function(h){
-    DB.users.push({ id: "U-" + (DB.counters.user++), username: username, passHash: h, role: role, createdAt: todayStr() });
+    DB.users.push({ id: CONFIG.ID_PREFIXES.user + (DB.counters.user++), username: username, passHash: h, role: role, createdAt: todayStr() });
     saveDB();
     el("nuUsername").value = ""; el("nuPassword").value = "";
     msg.textContent = "User added ✓";
@@ -798,7 +832,7 @@ function deleteUser(id){
   if(s && s.username.toLowerCase() === u.username.toLowerCase()){ alert("You cannot delete your own account."); return; }
   if(!confirm("Delete the account '" + u.username + "' (" + u.role + ")? They will no longer be able to sign in.")) return;
   DB.users = DB.users.filter(function(x){ return x.id !== id; });
-  saveDB(); renderUsers();
+  saveDB(); renderUsers(); renderDemoBanner();
 }
 function resetUserPassword(id){
   if(!requirePerm("users.manage")) return;
@@ -856,7 +890,7 @@ function savePatientForm(existing){
   var data = { name:name, age:Number(fieldVal("f_pAge"))||0, gender:fieldVal("f_pGender"),
                phone:fieldVal("f_pPhone"), address:fieldVal("f_pAddress"), blood:fieldVal("f_pBlood") };
   if(existing){ Object.assign(existing, data); }
-  else { data.id = "P-" + (DB.counters.patient++); DB.patients.push(data); }
+  else { data.id = CONFIG.ID_PREFIXES.patient + (DB.counters.patient++); DB.patients.push(data); }
   saveDB(); return true;
 }
 function renderPatients(){
@@ -917,7 +951,7 @@ function saveDoctorForm(existing){
   var data = { name:name, dept:fieldVal("f_dDept"), qual:fieldVal("f_dQual"), fee:round2(fieldVal("f_dFee")),
                days:fieldVal("f_dDays"), time:fieldVal("f_dTime") };
   if(existing){ Object.assign(existing, data); }
-  else { data.id = "D-" + (DB.counters.doctor++); DB.doctors.push(data); }
+  else { data.id = CONFIG.ID_PREFIXES.doctor + (DB.counters.doctor++); DB.doctors.push(data); }
   saveDB(); return true;
 }
 function renderDoctors(){
@@ -963,14 +997,14 @@ function bookAppointment(){
   if(el("bkPatient").value === "__new__" || !DB.patients.length){
     var nm = fieldVal("bkName"), ph = fieldVal("bkPhone");
     if(!nm){ alert("Enter the new patient's name."); return; }
-    pat = { id:"P-" + (DB.counters.patient++), name:nm, age:0, gender:"", phone:ph, address:"", blood:"" };
+    pat = { id:CONFIG.ID_PREFIXES.patient + (DB.counters.patient++), name:nm, age:0, gender:"", phone:ph, address:"", blood:"" };
     DB.patients.push(pat);
   } else {
     pat = findById(DB.patients, el("bkPatient").value);
   }
   if(!pat){ alert("Please choose a patient."); return; }
   var token = nextToken(doc.id, date);
-  DB.appointments.push({ id:"A-" + (DB.counters.appt), _seq: DB.counters.appt++, patientId:pat.id, patientName:pat.name,
+  DB.appointments.push({ id:CONFIG.ID_PREFIXES.appt + (DB.counters.appt), _seq: DB.counters.appt++, patientId:pat.id, patientName:pat.name,
                          doctorId:doc.id, doctorName:doc.name, date:date, token:token, status:"Waiting" });
   saveDB();
   el("bkNote").textContent = "Booked: " + pat.name + " with " + doc.name + " on " + date + " — Token #" + token;
@@ -1057,7 +1091,7 @@ function openInvoiceForm(){
     var items = invCollectItems();
     var r = calcInvoice(Number(el("invFee").value)||0, items, Number(el("invDiscount").value)||0);
     var paid = Math.min(round2(el("invPaid").value), r.total);
-    DB.invoices.push({ id:"INV-" + (DB.counters.invoice++), date: el("invDate").value || todayStr(),
+    DB.invoices.push({ id:CONFIG.ID_PREFIXES.invoice + (DB.counters.invoice++), date: el("invDate").value || todayStr(),
       patientId: pat ? pat.id : "", patientName: pname, doctorId: doc ? doc.id : "", doctorName: doc ? doc.name : "",
       fee: round2(el("invFee").value), items: items, discountPct: Number(el("invDiscount").value)||0,
       subtotal: r.subtotal, discount: r.discount, total: r.total, paid: paid });
@@ -1144,7 +1178,7 @@ function saveMedForm(existing){
   var data = { name:name, generic:fieldVal("f_mGeneric"), qty:Number(fieldVal("f_mQty"))||0,
                price:round2(fieldVal("f_mPrice")), expiry:fieldVal("f_mExpiry") };
   if(existing){ Object.assign(existing, data); }
-  else { data.id = "M-" + (DB.counters.med++); DB.medicines.push(data); }
+  else { data.id = CONFIG.ID_PREFIXES.med + (DB.counters.med++); DB.medicines.push(data); }
   saveDB(); return true;
 }
 function renderPharmacy(){
@@ -1179,7 +1213,7 @@ function dispenseMed(id){
   if(q <= 0){ alert("Enter a quantity to dispense."); return; }
   if(q > m.qty){ alert("Only " + m.qty + " in stock."); return; }
   m.qty -= q;
-  DB.dispenses.push({ id:"S-" + (DB.counters.dispense++), date:todayStr(), medId:m.id, name:m.name, qty:q, amount:round2(q*m.price) });
+  DB.dispenses.push({ id:CONFIG.ID_PREFIXES.dispense + (DB.counters.dispense++), date:todayStr(), medId:m.id, name:m.name, qty:q, amount:round2(q*m.price) });
   saveDB(); renderAll();
 }
 
@@ -1195,7 +1229,7 @@ function saveTestForm(existing){
   if(!name){ alert("Test name is required."); return false; }
   var data = { name:name, price:round2(fieldVal("f_tPrice")) };
   if(existing){ Object.assign(existing, data); }
-  else { data.id = "LT-" + (DB.counters.test++); DB.labTests.push(data); }
+  else { data.id = CONFIG.ID_PREFIXES.test + (DB.counters.test++); DB.labTests.push(data); }
   saveDB(); return true;
 }
 function renderLab(){
@@ -1228,7 +1262,7 @@ function orderTest(){
   var test = findById(DB.labTests, el("loTest").value);
   if(!pat){ alert("Please add a patient first."); return; }
   if(!test){ alert("Please add a lab test first."); return; }
-  DB.labOrders.push({ id:"LO-" + (DB.counters.order++), date:todayStr(), patientId:pat.id, patientName:pat.name,
+  DB.labOrders.push({ id:CONFIG.ID_PREFIXES.order + (DB.counters.order++), date:todayStr(), patientId:pat.id, patientName:pat.name,
                       testId:test.id, testName:test.name, price:test.price, status:"Pending", result:"" });
   saveDB(); renderAll();
 }
@@ -1331,7 +1365,7 @@ function seedDemoData(){
     { name:"Dr. Priya Nair", dept:"Pediatrics", qual:"MBBS, DCH", fee:35, days:"Mon – Fri", time:"10 AM – 2 PM" },
     { name:"Dr. Michael Ross", dept:"Orthopedics", qual:"MS (Ortho)", fee:55, days:"Tue – Sat", time:"11 AM – 3 PM" },
     { name:"Dr. Elena Petrova", dept:"Dermatology", qual:"MD (Derm)", fee:45, days:"Mon – Thu", time:"3 PM – 7 PM" }
-  ].map(function(d){ d.id = "D-" + (DB.counters.doctor++); DB.doctors.push(d); return d; });
+  ].map(function(d){ d.id = CONFIG.ID_PREFIXES.doctor + (DB.counters.doctor++); DB.doctors.push(d); return d; });
   var pats = [
     { name:"Ayesha Rahman", age:28, gender:"Female", phone:"+1 555 100 2001", address:"12 Rosewood Lane", blood:"B+" },
     { name:"Daniel Kim", age:45, gender:"Male", phone:"+1 555 100 2002", address:"48 Harbor Street", blood:"O+" },
@@ -1341,7 +1375,7 @@ function seedDemoData(){
     { name:"Peter Novak", age:52, gender:"Male", phone:"+1 555 100 2006", address:"210 River Road", blood:"A+" },
     { name:"Lucy Chen", age:8, gender:"Female", phone:"+1 555 100 2007", address:"5 Cherry Close", blood:"B-" },
     { name:"Omar Haddad", age:39, gender:"Male", phone:"+1 555 100 2008", address:"66 Cedar Avenue", blood:"AB-" }
-  ].map(function(p){ p.id = "P-" + (DB.counters.patient++); DB.patients.push(p); return p; });
+  ].map(function(p){ p.id = CONFIG.ID_PREFIXES.patient + (DB.counters.patient++); DB.patients.push(p); return p; });
   var apptSeed = [
     [pats[0], docs[0], "Done"], [pats[1], docs[1], "In Consultation"], [pats[2], docs[0], "Waiting"],
     [pats[3], docs[3], "Waiting"], [pats[4], docs[4], "Done"], [pats[6], docs[2], "Waiting"], [pats[5], docs[1], "Waiting"]
@@ -1350,7 +1384,7 @@ function seedDemoData(){
   apptSeed.forEach(function(s){
     var key = s[1].id + "|" + t;
     tokenCount[key] = (tokenCount[key]||0) + 1;
-    DB.appointments.push({ id:"A-" + (DB.counters.appt), _seq: DB.counters.appt++, patientId:s[0].id, patientName:s[0].name,
+    DB.appointments.push({ id:CONFIG.ID_PREFIXES.appt + (DB.counters.appt), _seq: DB.counters.appt++, patientId:s[0].id, patientName:s[0].name,
                            doctorId:s[1].id, doctorName:s[1].name, date:t, token:tokenCount[key], status:s[2] });
   });
   [
@@ -1362,24 +1396,24 @@ function seedDemoData(){
     { name:"Vitamin D3 1000 IU", generic:"Cholecalciferol", qty:150, price:0.30, expiry:"2027-09-30" },
     { name:"Cough Relief Syrup 100ml", generic:"Dextromethorphan", qty:40, price:2.50, expiry:"2025-08-31" },
     { name:"Antiseptic Cream 30g", generic:"Chlorhexidine", qty:60, price:1.80, expiry:"2027-02-28" }
-  ].forEach(function(m){ m.id = "M-" + (DB.counters.med++); DB.medicines.push(m); });
+  ].forEach(function(m){ m.id = CONFIG.ID_PREFIXES.med + (DB.counters.med++); DB.medicines.push(m); });
   var tests = [
     { name:"Complete Blood Count (CBC)", price:12 }, { name:"Fasting Blood Sugar", price:6 },
     { name:"ECG", price:15 }, { name:"Chest X-Ray", price:25 },
     { name:"Urine Routine Examination", price:8 }, { name:"Lipid Profile", price:20 }
-  ].map(function(x){ x.id = "LT-" + (DB.counters.test++); DB.labTests.push(x); return x; });
-  DB.labOrders.push({ id:"LO-" + (DB.counters.order++), date:t, patientId:pats[0].id, patientName:pats[0].name, testId:tests[0].id, testName:tests[0].name, price:tests[0].price, status:"Completed", result:"Within normal range" });
-  DB.labOrders.push({ id:"LO-" + (DB.counters.order++), date:t, patientId:pats[1].id, patientName:pats[1].name, testId:tests[2].id, testName:tests[2].name, price:tests[2].price, status:"Pending", result:"" });
+  ].map(function(x){ x.id = CONFIG.ID_PREFIXES.test + (DB.counters.test++); DB.labTests.push(x); return x; });
+  DB.labOrders.push({ id:CONFIG.ID_PREFIXES.order + (DB.counters.order++), date:t, patientId:pats[0].id, patientName:pats[0].name, testId:tests[0].id, testName:tests[0].name, price:tests[0].price, status:"Completed", result:"Within normal range" });
+  DB.labOrders.push({ id:CONFIG.ID_PREFIXES.order + (DB.counters.order++), date:t, patientId:pats[1].id, patientName:pats[1].name, testId:tests[2].id, testName:tests[2].name, price:tests[2].price, status:"Pending", result:"" });
   var inv1 = calcInvoice(docs[0].fee, [{qty:1, price:tests[0].price}, {qty:1, price:tests[1].price}], 0);
-  DB.invoices.push({ id:"INV-" + (DB.counters.invoice++), date:t, patientId:pats[0].id, patientName:pats[0].name,
+  DB.invoices.push({ id:CONFIG.ID_PREFIXES.invoice + (DB.counters.invoice++), date:t, patientId:pats[0].id, patientName:pats[0].name,
     doctorId:docs[0].id, doctorName:docs[0].name, fee:docs[0].fee, items:[{desc:tests[0].name, qty:1, price:tests[0].price},{desc:tests[1].name, qty:1, price:tests[1].price}],
     discountPct:0, subtotal:inv1.subtotal, discount:inv1.discount, total:inv1.total, paid:inv1.total });
   var inv2 = calcInvoice(docs[1].fee, [{qty:1, price:tests[2].price}], 10);
-  DB.invoices.push({ id:"INV-" + (DB.counters.invoice++), date:t, patientId:pats[1].id, patientName:pats[1].name,
+  DB.invoices.push({ id:CONFIG.ID_PREFIXES.invoice + (DB.counters.invoice++), date:t, patientId:pats[1].id, patientName:pats[1].name,
     doctorId:docs[1].id, doctorName:docs[1].name, fee:docs[1].fee, items:[{desc:tests[2].name, qty:1, price:tests[2].price}],
     discountPct:10, subtotal:inv2.subtotal, discount:inv2.discount, total:inv2.total, paid:30 });
-  DB.dispenses.push({ id:"S-" + (DB.counters.dispense++), date:t, medId:DB.medicines[0].id, name:DB.medicines[0].name, qty:20, amount:round2(20*DB.medicines[0].price) });
-  DB.dispenses.push({ id:"S-" + (DB.counters.dispense++), date:t, medId:DB.medicines[3].id, name:DB.medicines[3].name, qty:10, amount:round2(10*DB.medicines[3].price) });
+  DB.dispenses.push({ id:CONFIG.ID_PREFIXES.dispense + (DB.counters.dispense++), date:t, medId:DB.medicines[0].id, name:DB.medicines[0].name, qty:20, amount:round2(20*DB.medicines[0].price) });
+  DB.dispenses.push({ id:CONFIG.ID_PREFIXES.dispense + (DB.counters.dispense++), date:t, medId:DB.medicines[3].id, name:DB.medicines[3].name, qty:10, amount:round2(10*DB.medicines[3].price) });
   saveDB(); renderAll();
   alert("Demo data loaded. Explore the dashboard!");
 }
