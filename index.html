@@ -85,7 +85,7 @@ tr:hover td{background:#f8fafc}
 /* ---------- Print ---------- */
 #printArea{display:none}
 @media print{
-  .app,.modal-overlay{display:none!important}
+  .app,.modal-overlay,.auth-wrap{display:none!important}
   #printArea{display:block!important;font-size:13px;color:#000}
   #printArea .p-head{text-align:center;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:12px}
   #printArea .p-head h1{font-size:20px}
@@ -93,6 +93,18 @@ tr:hover td{background:#f8fafc}
   #printArea th{background:#eee;color:#000}
   #printArea .p-foot{margin-top:22px;display:flex;justify-content:space-between;font-size:12px}
 }
+/* ---------- Auth (login / first-run setup) ---------- */
+.auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:linear-gradient(160deg,#0b3b4d,#0e7490)}
+.auth-card{background:#fff;border-radius:14px;padding:28px;max-width:400px;width:100%;box-shadow:0 18px 50px rgba(0,0,0,.35)}
+.auth-card h1{font-size:30px;color:var(--primary-dark);letter-spacing:.02em;text-align:center}
+.auth-card h1 span{color:var(--accent)}
+.auth-sub{text-align:center;color:var(--muted);font-size:12.5px;margin:4px 0 18px}
+.auth-card h2{font-size:17px;color:var(--primary-dark);margin-bottom:6px}
+.auth-error{display:none;background:#fef2f2;border:1px solid #fecaca;color:var(--danger);border-radius:8px;padding:8px 10px;font-size:13px;margin-bottom:12px}
+.auth-divider{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;margin:16px 0}
+.auth-divider:before,.auth-divider:after{content:"";flex:1;border-top:1px solid var(--line)}
+.user-chip{padding:12px 16px;border-top:1px solid rgba(255,255,255,.15);font-size:12.5px}
+.role-badge{display:inline-block;background:#5eead4;color:#134e4a;padding:1px 8px;border-radius:20px;font-size:11px;font-weight:700;margin-left:4px}
 @media (max-width:880px){
   .app{flex-direction:column}
   .sidebar{width:100%;height:auto;position:static}
@@ -105,7 +117,39 @@ tr:hover td{background:#f8fafc}
 </style>
 </head>
 <body>
-<div class="app">
+<!-- ============ AUTH (login / first-run setup) ============ -->
+<div class="auth-wrap" id="authScreen" style="display:none">
+  <div class="auth-card">
+    <h1>Medi<span>Core</span></h1>
+    <p class="auth-sub">Clinic &amp; Hospital Management System</p>
+
+    <div id="setupForm" style="display:none">
+      <h2>Create your Admin account</h2>
+      <p class="small-txt muted" style="margin-bottom:12px">No user accounts exist yet. Create the first account — it gets the <b>Admin</b> role and can add accounts for reception, pharmacy and lab staff afterwards.</p>
+      <div class="auth-error" id="setupError"></div>
+      <div class="field"><label>Username</label><input type="text" id="setupUsername" placeholder="e.g. admin" autocomplete="username"></div>
+      <div class="field"><label>Password (min. 6 characters)</label><input type="password" id="setupPassword" placeholder="Choose a password" autocomplete="new-password"></div>
+      <div class="field"><label>Confirm Password</label><input type="password" id="setupPassword2" placeholder="Repeat the password" autocomplete="new-password"></div>
+      <button class="btn" id="btnSetup" style="width:100%">Create Admin account</button>
+    </div>
+
+    <div id="loginForm" style="display:none">
+      <h2>Sign in</h2>
+      <p class="small-txt muted" style="margin-bottom:12px">Enter your username and password to open MediCore.</p>
+      <div class="auth-error" id="loginError"></div>
+      <div class="field"><label>Username</label><input type="text" id="loginUsername" placeholder="Username" autocomplete="username"></div>
+      <div class="field"><label>Password</label><input type="password" id="loginPassword" placeholder="Password" autocomplete="current-password"></div>
+      <button class="btn" id="btnLogin" style="width:100%">Sign in</button>
+    </div>
+
+    <div class="auth-divider">just looking around?</div>
+    <button class="btn secondary" id="btnExploreDemo" style="width:100%">Explore the demo</button>
+    <p class="small-txt muted" style="margin-top:10px;text-align:center">Loads the sample clinic and signs you in as the demo Admin.<br>
+    Demo accounts — Admin: <b>admin / admin123</b> · Receptionist: <b>reception / reception123</b> · Pharmacist: <b>pharmacy / pharma123</b> · Lab Technician: <b>lab / labtech123</b></p>
+  </div>
+</div>
+
+<div class="app" id="appRoot" style="display:none">
   <!-- ============ SIDEBAR ============ -->
   <aside class="sidebar">
     <div class="brand">
@@ -123,7 +167,11 @@ tr:hover td{background:#f8fafc}
       <button data-nav="reports"><span class="ico">📊</span> Reports</button>
       <button data-nav="settings"><span class="ico">⚙</span> Settings</button>
     </nav>
-    <div class="side-foot">MediCore v1.0 · Works offline<br>Data stays in this browser.</div>
+    <div class="user-chip" id="userChip">
+      <div>Signed in as <b id="currentUserName">—</b><span class="role-badge" id="currentUserRole">—</span></div>
+      <button class="btn small secondary" id="btnLogout" style="margin-top:8px">Logout</button>
+    </div>
+    <div class="side-foot">MediCore v1.2 · Works offline<br>Data stays in this browser.</div>
   </aside>
 
   <!-- ============ MAIN ============ -->
@@ -302,6 +350,23 @@ tr:hover td{background:#f8fafc}
         <span class="small-txt muted" id="settingsSaved" style="margin-left:10px"></span>
       </div>
       <div class="card">
+        <h3>User Accounts</h3>
+        <p class="small-txt muted" style="margin-bottom:12px">Accounts are stored locally in this browser. Passwords are saved only as SHA-256 hashes — never in plain text. Roles decide what each person may change: <b>Admin</b> (everything, incl. users &amp; settings), <b>Receptionist</b> (patients, appointments, billing, lab orders), <b>Pharmacist</b> (medicines &amp; dispensing), <b>Lab Technician</b> (lab tests &amp; results).</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Username</th><th>Role</th><th>Created</th><th>Actions</th></tr></thead>
+          <tbody id="usersBody"></tbody>
+        </table></div>
+        <h4 style="margin:14px 0 8px;color:var(--primary-dark)">Add a user</h4>
+        <div class="row">
+          <div class="field"><label>Username</label><input type="text" id="nuUsername" placeholder="e.g. frontdesk"></div>
+          <div class="field"><label>Password (min. 6 characters)</label><input type="password" id="nuPassword" placeholder="New password"></div>
+          <div class="field"><label>Role</label><select id="nuRole"><option>Admin</option><option>Receptionist</option><option>Pharmacist</option><option>Lab Technician</option></select></div>
+        </div>
+        <button class="btn" id="btnAddUser">Add User</button>
+        <span class="small-txt muted" id="userMsg" style="margin-left:10px"></span>
+        <p class="small-txt muted" style="margin-top:10px">Demo accounts (created by “Load Demo Data” / “Explore the demo”): admin / admin123 · reception / reception123 · pharmacy / pharma123 · lab / labtech123 — reset these passwords before real use.</p>
+      </div>
+      <div class="card">
         <h3>Demo &amp; Data</h3>
         <p class="small-txt muted" style="margin-bottom:12px">Load the demo data set to explore a fully working clinic, or erase everything and start fresh. All data is stored only in this browser (localStorage).</p>
         <button class="btn" id="btnLoadDemo">Load Demo Data</button>
@@ -309,7 +374,7 @@ tr:hover td{background:#f8fafc}
       </div>
       <div class="card">
         <h3>About MediCore</h3>
-        <p class="small-txt muted">MediCore v1.0 — a single-file clinic &amp; hospital management system. No server, no internet and no installation required: open this file in any modern browser. Figures are estimates for management use; always verify critical records.</p>
+        <p class="small-txt muted">MediCore v1.2 — a single-file clinic &amp; hospital management system with user login and role-based access control. No server, no internet and no installation required: open this file in any modern browser. Figures are estimates for management use; always verify critical records.</p>
       </div>
     </section>
 
@@ -336,6 +401,8 @@ tr:hover td{background:#f8fafc}
 /* ================================================================
    MediCore — Clinic & Hospital Management System (single file)
    All data lives in the browser's localStorage. No server needed.
+   v1.2 adds local user accounts with role-based access control —
+   see the AUTH section below (PERMS matrix + requirePerm guards).
    ================================================================ */
 var LS_KEY = "medicore_db_v1";
 var store = (typeof localStorage !== "undefined") ? localStorage : null;
@@ -345,7 +412,8 @@ function defaultDB(){
     patients: [], doctors: [], appointments: [], invoices: [],
     medicines: [], labTests: [], labOrders: [], dispenses: [],
     settings: { clinicName: "MediCore Demo Clinic", address: "123 Wellness Avenue", phone: "+1 555 010 2233", currency: "$" },
-    counters: { patient: 1001, doctor: 101, appt: 1, invoice: 5001, med: 1, test: 1, order: 1, dispense: 1 }
+    users: [],
+    counters: { patient: 1001, doctor: 101, appt: 1, invoice: 5001, med: 1, test: 1, order: 1, dispense: 1, user: 1 }
   };
 }
 var DB = defaultDB();
@@ -354,6 +422,11 @@ function loadDB(){
   try{
     var raw = store.getItem(LS_KEY);
     if(raw){ var parsed = JSON.parse(raw); if(parsed && parsed.settings){ DB = parsed; } }
+    /* Migration for databases saved before v1.2: add the users array and
+       the user ID counter if they are missing. */
+    if(!Array.isArray(DB.users)) DB.users = [];
+    if(!DB.counters) DB.counters = defaultDB().counters;
+    if(!DB.counters.user) DB.counters.user = DB.users.length + 1;
   }catch(e){ /* corrupted storage -> keep defaults */ }
 }
 function saveDB(){ if(store){ try{ store.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){} } }
@@ -405,6 +478,162 @@ function collectionFor(dateFrom, dateTo){
   return { invoices: round2(inv), pharmacy: round2(pha), total: round2(inv+pha) };
 }
 
+/* ================================================================
+   AUTH — local user accounts & role-based access control (v1.2)
+   - Accounts live in DB.users: {id, username, passHash, role, createdAt}
+   - Passwords are stored ONLY as SHA-256 hashes (lowercase hex).
+     Plain passwords are never stored, logged or displayed.
+   - The signed-in session is kept separately in localStorage under
+     SESSION_KEY as {username, role} — never inside the DB object.
+   - Every mutating handler in this file starts with a requirePerm()
+     guard, and renderers hide/disable controls the role may not use.
+   ================================================================ */
+var SESSION_KEY = "medicore_session_v1";
+var ROLES = ["Admin", "Receptionist", "Pharmacist", "Lab Technician"];
+
+/* Permission matrix. "write" permissions cover create/update/delete for
+   that area; dispense, lab-order creation, settings, user management and
+   demo/reset data actions are separate permissions. */
+var PERMS = {
+  "Admin":          ["patients.write", "doctors.write", "appointments.write", "billing.write",
+                     "pharmacy.write", "pharmacy.dispense", "lab.write", "labOrders.create",
+                     "labOrders.write", "settings.write", "users.manage", "data.manage"],
+  "Receptionist":   ["patients.write", "appointments.write", "billing.write", "labOrders.create"],
+  "Pharmacist":     ["pharmacy.write", "pharmacy.dispense"],
+  "Lab Technician": ["lab.write", "labOrders.create", "labOrders.write"]
+};
+
+/* ---- SHA-256 (synchronous fallback) ----
+   crypto.subtle.digest is the preferred path, but it is only available
+   in secure contexts; on some file:// or plain-http setups it is
+   missing. This compact synchronous SHA-256 produces the IDENTICAL
+   lowercase-hex digest, so hashes are always genuine SHA-256 either
+   way. It operates on the UTF-8 encoding of the input. */
+function utf8Bytes(str){
+  var out = [];
+  for(var i=0;i<str.length;i++){
+    var c = str.charCodeAt(i);
+    if(c < 0x80){ out.push(c); }
+    else if(c < 0x800){ out.push(0xc0|(c>>6), 0x80|(c&0x3f)); }
+    else if(c >= 0xd800 && c <= 0xdbff && i+1 < str.length){
+      var cp = 0x10000 + ((c&0x3ff)<<10) + (str.charCodeAt(++i)&0x3ff);
+      out.push(0xf0|(cp>>18), 0x80|((cp>>12)&0x3f), 0x80|((cp>>6)&0x3f), 0x80|(cp&0x3f));
+    }
+    else { out.push(0xe0|(c>>12), 0x80|((c>>6)&0x3f), 0x80|(c&0x3f)); }
+  }
+  return out;
+}
+function sha256Sync(str){
+  var K = [0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+           0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+           0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+           0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+           0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+           0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+           0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+           0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  var H = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  var bytes = utf8Bytes(str), bitLen = bytes.length * 8, i, t;
+  bytes.push(0x80);
+  while(bytes.length % 64 !== 56) bytes.push(0);
+  bytes.push(0, 0, 0, 0, (bitLen>>>24)&0xff, (bitLen>>>16)&0xff, (bitLen>>>8)&0xff, bitLen&0xff);
+  function rotr(x, n){ return (x>>>n) | (x<<(32-n)); }
+  var w = new Array(64);
+  for(var block=0; block<bytes.length; block+=64){
+    for(t=0;t<16;t++) w[t] = (bytes[block+t*4]<<24) | (bytes[block+t*4+1]<<16) | (bytes[block+t*4+2]<<8) | bytes[block+t*4+3];
+    for(t=16;t<64;t++){
+      var s0 = rotr(w[t-15],7) ^ rotr(w[t-15],18) ^ (w[t-15]>>>3);
+      var s1 = rotr(w[t-2],17) ^ rotr(w[t-2],19) ^ (w[t-2]>>>10);
+      w[t] = (w[t-16] + s0 + w[t-7] + s1) | 0;
+    }
+    var a=H[0], b=H[1], c=H[2], d=H[3], e=H[4], f=H[5], g=H[6], h=H[7];
+    for(t=0;t<64;t++){
+      var S1 = rotr(e,6) ^ rotr(e,11) ^ rotr(e,25);
+      var ch = (e & f) ^ (~e & g);
+      var temp1 = (h + S1 + ch + K[t] + w[t]) | 0;
+      var S0 = rotr(a,2) ^ rotr(a,13) ^ rotr(a,22);
+      var maj = (a & b) ^ (a & c) ^ (b & c);
+      var temp2 = (S0 + maj) | 0;
+      h=g; g=f; f=e; e=(d+temp1)|0; d=c; c=b; b=a; a=(temp1+temp2)|0;
+    }
+    H[0]=(H[0]+a)|0; H[1]=(H[1]+b)|0; H[2]=(H[2]+c)|0; H[3]=(H[3]+d)|0;
+    H[4]=(H[4]+e)|0; H[5]=(H[5]+f)|0; H[6]=(H[6]+g)|0; H[7]=(H[7]+h)|0;
+  }
+  var hex = "";
+  for(i=0;i<8;i++) hex += ("00000000" + (H[i]>>>0).toString(16)).slice(-8);
+  return hex;
+}
+/* Returns a Promise of the lowercase-hex SHA-256 of the password. */
+function hashPassword(pw){
+  if(typeof crypto !== "undefined" && crypto.subtle && crypto.subtle.digest && typeof TextEncoder !== "undefined"){
+    return crypto.subtle.digest("SHA-256", new TextEncoder().encode(pw)).then(function(buf){
+      var bytes = new Uint8Array(buf), hex = "";
+      for(var i=0;i<bytes.length;i++) hex += ("0" + bytes[i].toString(16)).slice(-2);
+      return hex;
+    }).catch(function(){ return sha256Sync(pw); });
+  }
+  /* Non-secure context fallback: synchronous SHA-256 above (identical digest). */
+  return Promise.resolve(sha256Sync(pw));
+}
+
+/* ---- Session ---- */
+function getSession(){
+  if(!store) return null;
+  try{ var s = JSON.parse(store.getItem(SESSION_KEY) || "null"); return (s && s.username) ? s : null; }
+  catch(e){ return null; }
+}
+function setSession(username, role){
+  if(store){ try{ store.setItem(SESSION_KEY, JSON.stringify({ username: username, role: role })); }catch(e){} }
+}
+function clearSession(){ if(store){ try{ store.removeItem(SESSION_KEY); }catch(e){} } }
+function findUser(username){
+  var u = String(username || "").toLowerCase();
+  for(var i=0;i<DB.users.length;i++){ if(DB.users[i].username.toLowerCase() === u) return DB.users[i]; }
+  return null;
+}
+/* The user record for the current session, or null when signed out
+   (including when the account was deleted by an Admin). */
+function sessionUser(){
+  var s = getSession(); if(!s) return null;
+  return findUser(s.username);
+}
+
+/* ---- Permission checks ---- */
+function can(perm){
+  var s = getSession(); if(!s) return false;
+  var list = PERMS[s.role] || [];
+  return list.indexOf(perm) > -1;
+}
+/* Guard used at the START of every mutating handler: returns true when
+   the signed-in role may perform the action; otherwise shows a denial
+   message and returns false so the handler aborts without changes. */
+function requirePerm(perm){
+  if(can(perm)) return true;
+  var s = getSession();
+  alert("Access denied — " + (s ? ("the " + s.role + " role") : "you") + " cannot perform this action (" + perm + ").");
+  return false;
+}
+
+/* ---- Demo accounts (created by Load Demo Data / Explore the demo) ---- */
+var DEMO_USERS = [
+  { username: "admin",     password: "admin123",     role: "Admin" },
+  { username: "reception", password: "reception123", role: "Receptionist" },
+  { username: "pharmacy",  password: "pharma123",    role: "Pharmacist" },
+  { username: "lab",       password: "labtech123",   role: "Lab Technician" }
+];
+function ensureDemoUsers(){
+  var missing = DEMO_USERS.filter(function(d){ return !findUser(d.username); });
+  if(!missing.length) return Promise.resolve(false);
+  return Promise.all(missing.map(function(d){
+    return hashPassword(d.password).then(function(h){
+      return { id: "U-" + (DB.counters.user++), username: d.username, passHash: h, role: d.role, createdAt: todayStr() };
+    });
+  })).then(function(newUsers){
+    newUsers.forEach(function(u){ DB.users.push(u); });
+    saveDB(); return true;
+  });
+}
+
 /* ---------------- DOM layer ---------------- */
 function el(id){ return document.getElementById(id); }
 var modalOnSave = null;
@@ -419,6 +648,9 @@ function closeModal(){ el("modalOverlay").classList.remove("open"); modalOnSave 
 function fieldVal(id){ var n = el(id); return n ? n.value.trim() : ""; }
 
 function showSection(name){
+  /* Settings (clinic profile, user accounts, data reset) is Admin-only:
+     other roles never see the section, even if triggered directly. */
+  if(name === "settings" && !can("settings.write")) name = "dashboard";
   var secs = document.querySelectorAll(".section");
   secs.forEach(function(s){ s.classList.remove("active"); });
   el("sec-" + name).classList.add("active");
@@ -429,11 +661,155 @@ function showSection(name){
 function renderAll(){
   renderBrand(); renderDashboard(); renderPatients(); renderDoctors();
   fillBookingSelects(); renderAppointments(); renderBilling();
-  renderPharmacy(); renderLab(); renderReports(); renderSettings();
+  renderPharmacy(); renderLab(); renderReports(); renderSettings(); renderUsers();
 }
 function renderBrand(){
   el("brandClinicName").textContent = DB.settings.clinicName || "Clinic & Hospital Management";
   document.title = "MediCore — " + (DB.settings.clinicName || "Clinic & Hospital Management");
+}
+
+/* ---------------- Auth screens & flow ---------------- */
+function authError(id, msg){
+  var n = el(id); if(!n) return;
+  n.textContent = msg || ""; n.style.display = msg ? "block" : "none";
+}
+/* Show the auth screen: "setup" when no accounts exist yet, else "login".
+   The app UI stays hidden until a session is established. */
+function showAuth(mode){
+  el("appRoot").style.display = "none";
+  el("authScreen").style.display = "flex";
+  el("setupForm").style.display = (mode === "setup") ? "block" : "none";
+  el("loginForm").style.display = (mode === "setup") ? "none" : "block";
+  authError("setupError", ""); authError("loginError", "");
+}
+function showApp(){
+  el("authScreen").style.display = "none";
+  el("appRoot").style.display = "flex";
+  applyPermissions();
+  renderAll();
+}
+/* Entry gate used at startup and after data reset. */
+function authGate(){
+  if(!DB.users.length){ showAuth("setup"); return; }
+  if(!sessionUser()){ clearSession(); showAuth("login"); return; }
+  showApp();
+}
+function submitSetup(){
+  if(DB.users.length){ showAuth("login"); return; }   /* first-run setup only */
+  var username = fieldVal("setupUsername");
+  var pw = el("setupPassword").value, pw2 = el("setupPassword2").value;
+  if(!username){ authError("setupError", "Please choose a username."); return; }
+  if(pw.length < 6){ authError("setupError", "Password must be at least 6 characters."); return; }
+  if(pw !== pw2){ authError("setupError", "The two passwords do not match."); return; }
+  hashPassword(pw).then(function(h){
+    DB.users.push({ id: "U-" + (DB.counters.user++), username: username, passHash: h, role: "Admin", createdAt: todayStr() });
+    saveDB();
+    setSession(username, "Admin");
+    el("setupPassword").value = ""; el("setupPassword2").value = "";
+    showApp();
+  });
+}
+function attemptLogin(){
+  var username = fieldVal("loginUsername");
+  var pw = el("loginPassword").value;
+  var user = findUser(username);
+  if(!user || !pw){ authError("loginError", "Invalid username or password."); return; }
+  hashPassword(pw).then(function(h){
+    if(h === user.passHash){
+      setSession(user.username, user.role);
+      el("loginPassword").value = "";
+      showApp();
+    } else {
+      authError("loginError", "Invalid username or password.");
+    }
+  });
+}
+function doLogout(){
+  clearSession();
+  showAuth(DB.users.length ? "login" : "setup");
+}
+/* "Explore the demo": seed the sample clinic + demo accounts, then sign
+   in as the demo Admin so a first-time visitor lands inside the app. */
+function exploreDemo(){
+  seedDemoData();
+  ensureDemoUsers().then(function(){
+    setSession("admin", "Admin");
+    showApp();
+  });
+}
+
+/* ---------------- Permission-driven UI ---------------- */
+/* Hides the controls (and the Settings nav entry) that the signed-in
+   role may not use. Row-level buttons are handled inside each render
+   function via can(); the guards in the handlers enforce the same
+   rules even if a hidden control is somehow triggered. */
+function applyPermissions(){
+  var s = getSession(); if(!s) return;
+  el("currentUserName").textContent = s.username;
+  el("currentUserRole").textContent = s.role;
+  document.querySelectorAll("#mainNav button").forEach(function(b){
+    b.style.display = (b.getAttribute("data-nav") === "settings" && !can("settings.write")) ? "none" : "";
+  });
+  el("btnAddPatient").style.display = can("patients.write") ? "" : "none";
+  el("btnAddDoctor").style.display = can("doctors.write") ? "" : "none";
+  el("btnNewInvoice").style.display = can("billing.write") ? "" : "none";
+  el("btnAddMed").style.display = can("pharmacy.write") ? "" : "none";
+  el("btnAddTest").style.display = can("lab.write") ? "" : "none";
+  el("btnOrderTest").style.display = can("labOrders.create") ? "" : "none";
+  var bkForm = el("btnBook").closest(".inline-form");
+  if(bkForm) bkForm.style.display = can("appointments.write") ? "" : "none";
+  var loForm = el("btnOrderTest").closest(".inline-form");
+  if(loForm) loForm.style.display = can("labOrders.create") ? "" : "none";
+  if(el("sec-settings").classList.contains("active") && !can("settings.write")) showSection("dashboard");
+}
+
+/* ---------------- User management (Admin, in Settings) ---------------- */
+function renderUsers(){
+  var body = el("usersBody"); if(!body) return;
+  var s = getSession();
+  body.innerHTML = DB.users.length ? DB.users.map(function(u){
+    var self = s && s.username.toLowerCase() === u.username.toLowerCase();
+    return "<tr><td><b>" + esc(u.username) + "</b>" + (self ? ' <span class="badge b-comp">You</span>' : "") + "</td><td>" + esc(u.role) +
+      "</td><td>" + esc(u.createdAt || "—") + '</td><td><div class="actions">' +
+      '<button class="btn small secondary" onclick="resetUserPassword(\'' + u.id + '\')">Reset Password</button>' +
+      (self ? "" : '<button class="btn small danger" onclick="deleteUser(\'' + u.id + '\')">Delete</button>') + "</div></td></tr>";
+  }).join("") : '<tr><td colspan="4" class="empty">No user accounts yet.</td></tr>';
+}
+function addUserFromForm(){
+  if(!requirePerm("users.manage")) return;
+  var username = fieldVal("nuUsername"), pw = el("nuPassword").value, role = el("nuRole").value;
+  var msg = el("userMsg");
+  if(!username){ msg.textContent = "Enter a username."; return; }
+  if(ROLES.indexOf(role) < 0){ msg.textContent = "Choose a valid role."; return; }
+  if(pw.length < 6){ msg.textContent = "Password must be at least 6 characters."; return; }
+  if(findUser(username)){ msg.textContent = "That username is already taken."; return; }
+  hashPassword(pw).then(function(h){
+    DB.users.push({ id: "U-" + (DB.counters.user++), username: username, passHash: h, role: role, createdAt: todayStr() });
+    saveDB();
+    el("nuUsername").value = ""; el("nuPassword").value = "";
+    msg.textContent = "User added ✓";
+    renderUsers();
+  });
+}
+function deleteUser(id){
+  if(!requirePerm("users.manage")) return;
+  var u = findById(DB.users, id); if(!u) return;
+  var s = getSession();
+  if(s && s.username.toLowerCase() === u.username.toLowerCase()){ alert("You cannot delete your own account."); return; }
+  if(!confirm("Delete the account '" + u.username + "' (" + u.role + ")? They will no longer be able to sign in.")) return;
+  DB.users = DB.users.filter(function(x){ return x.id !== id; });
+  saveDB(); renderUsers();
+}
+function resetUserPassword(id){
+  if(!requirePerm("users.manage")) return;
+  var u = findById(DB.users, id); if(!u) return;
+  var pw = prompt("Enter a NEW password for '" + u.username + "' (min. 6 characters):", "");
+  if(pw === null) return;
+  if(pw.length < 6){ alert("Password must be at least 6 characters."); return; }
+  hashPassword(pw).then(function(h){
+    u.passHash = h; saveDB();
+    alert("Password for '" + u.username + "' has been reset.");
+  });
 }
 
 /* ---------------- Dashboard ---------------- */
@@ -474,6 +850,7 @@ function patientFormHTML(p){
     '<div class="field"><label>Address</label><input id="f_pAddress" value="' + esc(p.address||"") + '"></div>';
 }
 function savePatientForm(existing){
+  if(!requirePerm("patients.write")) return false;
   var name = fieldVal("f_pName");
   if(!name){ alert("Patient name is required."); return false; }
   var data = { name:name, age:Number(fieldVal("f_pAge"))||0, gender:fieldVal("f_pGender"),
@@ -491,15 +868,18 @@ function renderPatients(){
     return "<tr><td><b>" + p.id + "</b></td><td>" + esc(p.name) + "</td><td>" + p.age + " / " + esc(p.gender) +
       "</td><td>" + esc(p.phone||"—") + "</td><td>" + esc(p.blood||"—") + '</td><td><div class="actions">' +
       '<button class="btn small ghost" onclick="viewHistory(\'' + p.id + '\')">History</button>' +
-      '<button class="btn small secondary" onclick="editPatient(\'' + p.id + '\')">Edit</button>' +
-      '<button class="btn small danger" onclick="deletePatient(\'' + p.id + '\')">Delete</button></div></td></tr>';
+      (can("patients.write") ?
+        '<button class="btn small secondary" onclick="editPatient(\'' + p.id + '\')">Edit</button>' +
+        '<button class="btn small danger" onclick="deletePatient(\'' + p.id + '\')">Delete</button>' : "") + "</div></td></tr>";
   }).join("") : '<tr><td colspan="6" class="empty">No patients found.</td></tr>';
 }
 function editPatient(id){
+  if(!requirePerm("patients.write")) return;
   var p = findById(DB.patients, id); if(!p) return;
   openModal("Edit Patient — " + p.id, patientFormHTML(p), function(){ if(savePatientForm(p)){ closeModal(); renderAll(); } });
 }
 function deletePatient(id){
+  if(!requirePerm("patients.write")) return;
   if(!confirm("Delete this patient record? Their appointments and invoices will remain in history.")) return;
   DB.patients = DB.patients.filter(function(p){ return p.id!==id; }); saveDB(); renderAll();
 }
@@ -531,6 +911,7 @@ function doctorFormHTML(d){
     '<div class="field"><label>Time</label><input id="f_dTime" value="' + esc(d.time||"") + '" placeholder="e.g. 10 AM – 2 PM"></div></div>';
 }
 function saveDoctorForm(existing){
+  if(!requirePerm("doctors.write")) return false;
   var name = fieldVal("f_dName");
   if(!name){ alert("Doctor name is required."); return false; }
   var data = { name:name, dept:fieldVal("f_dDept"), qual:fieldVal("f_dQual"), fee:round2(fieldVal("f_dFee")),
@@ -543,15 +924,17 @@ function renderDoctors(){
   el("doctorsBody").innerHTML = DB.doctors.length ? DB.doctors.map(function(d){
     return "<tr><td><b>" + esc(d.name) + "</b></td><td>" + esc(d.dept||"—") + "</td><td>" + esc(d.qual||"—") +
       "</td><td>" + money(d.fee) + "</td><td>" + esc(d.days||"") + (d.time ? "<br><span class='muted small-txt'>" + esc(d.time) + "</span>" : "") +
-      '</td><td><div class="actions"><button class="btn small secondary" onclick="editDoctor(\'' + d.id + '\')">Edit</button>' +
-      '<button class="btn small danger" onclick="deleteDoctor(\'' + d.id + '\')">Delete</button></div></td></tr>';
+      '</td><td>' + (can("doctors.write") ? '<div class="actions"><button class="btn small secondary" onclick="editDoctor(\'' + d.id + '\')">Edit</button>' +
+      '<button class="btn small danger" onclick="deleteDoctor(\'' + d.id + '\')">Delete</button></div>' : '<span class="muted small-txt">View only</span>') + "</td></tr>";
   }).join("") : '<tr><td colspan="6" class="empty">No doctors yet. Add your first doctor.</td></tr>';
 }
 function editDoctor(id){
+  if(!requirePerm("doctors.write")) return;
   var d = findById(DB.doctors, id); if(!d) return;
   openModal("Edit Doctor — " + d.id, doctorFormHTML(d), function(){ if(saveDoctorForm(d)){ closeModal(); renderAll(); } });
 }
 function deleteDoctor(id){
+  if(!requirePerm("doctors.write")) return;
   if(!confirm("Delete this doctor?")) return;
   DB.doctors = DB.doctors.filter(function(d){ return d.id!==id; }); saveDB(); renderAll();
 }
@@ -572,6 +955,7 @@ function fillBookingSelects(){
   el("loTest").innerHTML = DB.labTests.map(function(t){ return '<option value="' + t.id + '">' + esc(t.name) + " — " + money(t.price) + "</option>"; }).join("");
 }
 function bookAppointment(){
+  if(!requirePerm("appointments.write")) return;
   var docId = el("bkDoctor").value, date = el("bkDate").value || todayStr();
   var doc = findById(DB.doctors, docId);
   if(!doc){ alert("Please add a doctor first."); return; }
@@ -603,14 +987,16 @@ function renderAppointments(){
     var pat = findById(DB.patients, a.patientId);
     var opts = statuses.map(function(s){ return '<option ' + (a.status===s?"selected":"") + '>' + s + "</option>"; }).join("");
     return "<tr><td><b>#" + a.token + "</b></td><td>" + esc(a.patientName) + "</td><td>" + esc(pat ? pat.phone : "—") +
-      "</td><td>" + esc(a.doctorName) + '</td><td><select onchange="setApptStatus(\'' + a.id + '\', this.value)" style="width:auto;padding:5px 8px">' + opts + "</select></td>" +
-      '<td><button class="btn small danger" onclick="deleteAppt(\'' + a.id + '\')">Delete</button></td></tr>';
+      "</td><td>" + esc(a.doctorName) + '</td><td><select onchange="setApptStatus(\'' + a.id + '\', this.value)" style="width:auto;padding:5px 8px"' + (can("appointments.write") ? "" : " disabled") + ">" + opts + "</select></td>" +
+      "<td>" + (can("appointments.write") ? '<button class="btn small danger" onclick="deleteAppt(\'' + a.id + '\')">Delete</button>' : '<span class="muted small-txt">View only</span>') + "</td></tr>";
   }).join("") : '<tr><td colspan="6" class="empty">No appointments for this date.</td></tr>';
 }
 function setApptStatus(id, st){
+  if(!requirePerm("appointments.write")){ renderAppointments(); return; }
   var a = findById(DB.appointments, id); if(a){ a.status = st; saveDB(); renderAll(); }
 }
 function deleteAppt(id){
+  if(!requirePerm("appointments.write")) return;
   if(!confirm("Delete this appointment?")) return;
   DB.appointments = DB.appointments.filter(function(a){ return a.id!==id; }); saveDB(); renderAll();
 }
@@ -659,8 +1045,10 @@ function invDoctorChanged(){
 }
 function invAddItem(){ el("invItems").insertAdjacentHTML("beforeend", itemRowHTML({desc:"",qty:1,price:0})); }
 function openInvoiceForm(){
+  if(!requirePerm("billing.write")) return;
   if(!DB.doctors.length){ alert("Please add at least one doctor first."); return; }
   openModal("New Invoice", invoiceFormHTML(null), function(){
+    if(!requirePerm("billing.write")) return;
     var pname = fieldVal("invPatient");
     if(!pname){ alert("Patient name is required."); return; }
     var pat = null;
@@ -690,11 +1078,13 @@ function renderBilling(){
     return "<tr><td><b>" + x.id + "</b></td><td>" + esc(x.date) + "</td><td>" + esc(x.patientName) + "</td><td>" + esc(x.doctorName||"—") +
       "</td><td>" + money(x.total) + "</td><td>" + money(x.paid) + "</td><td>" + money(invoiceDue(x)) + "</td><td>" + statusBadge(st) +
       '</td><td><div class="actions"><button class="btn small ghost" onclick="printInvoice(\'' + x.id + '\')">Print</button>' +
-      '<button class="btn small secondary" onclick="receivePayment(\'' + x.id + '\')">Pay</button>' +
-      '<button class="btn small danger" onclick="deleteInvoice(\'' + x.id + '\')">Delete</button></div></td></tr>';
+      (can("billing.write") ?
+        '<button class="btn small secondary" onclick="receivePayment(\'' + x.id + '\')">Pay</button>' +
+        '<button class="btn small danger" onclick="deleteInvoice(\'' + x.id + '\')">Delete</button>' : "") + "</div></td></tr>";
   }).join("") : '<tr><td colspan="9" class="empty">No invoices yet.</td></tr>';
 }
 function receivePayment(id){
+  if(!requirePerm("billing.write")) return;
   var x = findById(DB.invoices, id); if(!x) return;
   var due = invoiceDue(x);
   if(due <= 0){ alert("This invoice is fully paid."); return; }
@@ -705,6 +1095,7 @@ function receivePayment(id){
   x.paid = round2(x.paid + Math.min(amt, due)); saveDB(); renderAll();
 }
 function deleteInvoice(id){
+  if(!requirePerm("billing.write")) return;
   if(!confirm("Delete this invoice?")) return;
   DB.invoices = DB.invoices.filter(function(x){ return x.id!==id; }); saveDB(); renderAll();
 }
@@ -747,6 +1138,7 @@ function medFormHTML(m){
     '<div class="field"><label>Expiry Date</label><input id="f_mExpiry" type="date" value="' + esc(m.expiry||"") + '"></div></div>';
 }
 function saveMedForm(existing){
+  if(!requirePerm("pharmacy.write")) return false;
   var name = fieldVal("f_mName");
   if(!name){ alert("Medicine name is required."); return false; }
   var data = { name:name, generic:fieldVal("f_mGeneric"), qty:Number(fieldVal("f_mQty"))||0,
@@ -762,22 +1154,25 @@ function renderPharmacy(){
     else if(isLowStock(m)) badges += ' <span class="badge b-low">Low stock</span>';
     else badges += ' <span class="badge b-ok">In stock</span>';
     return "<tr><td><b>" + esc(m.name) + "</b></td><td>" + esc(m.generic||"—") + "</td><td>" + m.qty + "</td><td>" + money(m.price) +
-      "</td><td>" + esc(m.expiry||"—") + "</td><td>" + badges + '</td><td><div class="actions">' +
+      "</td><td>" + esc(m.expiry||"—") + "</td><td>" + badges + "</td><td>" + (can("pharmacy.dispense") ? '<div class="actions">' +
       '<input type="number" min="1" value="1" id="disp_' + m.id + '" style="width:64px;padding:5px 7px">' +
-      '<button class="btn small" onclick="dispenseMed(\'' + m.id + '\')">Sell</button></div></td>' +
-      '<td><div class="actions"><button class="btn small secondary" onclick="editMed(\'' + m.id + '\')">Edit</button>' +
-      '<button class="btn small danger" onclick="deleteMed(\'' + m.id + '\')">Delete</button></div></td></tr>';
+      '<button class="btn small" onclick="dispenseMed(\'' + m.id + '\')">Sell</button></div>' : '<span class="muted small-txt">—</span>') + "</td>" +
+      "<td>" + (can("pharmacy.write") ? '<div class="actions"><button class="btn small secondary" onclick="editMed(\'' + m.id + '\')">Edit</button>' +
+      '<button class="btn small danger" onclick="deleteMed(\'' + m.id + '\')">Delete</button></div>' : '<span class="muted small-txt">View only</span>') + "</td></tr>";
   }).join("") : '<tr><td colspan="8" class="empty">No medicines in stock yet.</td></tr>';
 }
 function editMed(id){
+  if(!requirePerm("pharmacy.write")) return;
   var m = findById(DB.medicines, id); if(!m) return;
   openModal("Edit Medicine — " + m.id, medFormHTML(m), function(){ if(saveMedForm(m)){ closeModal(); renderAll(); } });
 }
 function deleteMed(id){
+  if(!requirePerm("pharmacy.write")) return;
   if(!confirm("Delete this medicine from stock?")) return;
   DB.medicines = DB.medicines.filter(function(m){ return m.id!==id; }); saveDB(); renderAll();
 }
 function dispenseMed(id){
+  if(!requirePerm("pharmacy.dispense")) return;
   var m = findById(DB.medicines, id); if(!m) return;
   if(isExpired(m)){ alert("This medicine is expired and cannot be sold."); return; }
   var q = Number(el("disp_" + id).value) || 0;
@@ -795,6 +1190,7 @@ function testFormHTML(t){
          '<div class="field"><label>Price</label><input id="f_tPrice" type="number" min="0" step="0.01" value="' + (t.price!=null?t.price:"") + '"></div>';
 }
 function saveTestForm(existing){
+  if(!requirePerm("lab.write")) return false;
   var name = fieldVal("f_tName");
   if(!name){ alert("Test name is required."); return false; }
   var data = { name:name, price:round2(fieldVal("f_tPrice")) };
@@ -804,27 +1200,30 @@ function saveTestForm(existing){
 }
 function renderLab(){
   el("labTestsBody").innerHTML = DB.labTests.length ? DB.labTests.map(function(t){
-    return "<tr><td><b>" + esc(t.name) + "</b></td><td>" + money(t.price) + '</td><td><div class="actions">' +
+    return "<tr><td><b>" + esc(t.name) + "</b></td><td>" + money(t.price) + "</td><td>" + (can("lab.write") ? '<div class="actions">' +
       '<button class="btn small secondary" onclick="editTest(\'' + t.id + '\')">Edit</button>' +
-      '<button class="btn small danger" onclick="deleteTest(\'' + t.id + '\')">Delete</button></div></td></tr>';
+      '<button class="btn small danger" onclick="deleteTest(\'' + t.id + '\')">Delete</button></div>' : '<span class="muted small-txt">View only</span>') + "</td></tr>";
   }).join("") : '<tr><td colspan="3" class="empty">No tests in the catalogue yet.</td></tr>';
   el("labOrdersBody").innerHTML = DB.labOrders.length ? DB.labOrders.slice().reverse().map(function(o){
     return "<tr><td><b>" + o.id + "</b></td><td>" + esc(o.date) + "</td><td>" + esc(o.patientName) + "</td><td>" + esc(o.testName) +
       "</td><td>" + esc(o.result||"—") + "</td><td>" + statusBadge(o.status) + '</td><td><div class="actions">' +
-      (o.status==="Pending" ? '<button class="btn small" onclick="completeLabOrder(\'' + o.id + '\')">Enter Result</button>' : "") +
+      (o.status==="Pending" && can("labOrders.write") ? '<button class="btn small" onclick="completeLabOrder(\'' + o.id + '\')">Enter Result</button>' : "") +
       '<button class="btn small ghost" onclick="printLabReport(\'' + o.id + '\')">Report</button>' +
-      '<button class="btn small danger" onclick="deleteLabOrder(\'' + o.id + '\')">Delete</button></div></td></tr>';
+      (can("labOrders.write") ? '<button class="btn small danger" onclick="deleteLabOrder(\'' + o.id + '\')">Delete</button>' : "") + "</div></td></tr>";
   }).join("") : '<tr><td colspan="7" class="empty">No lab orders yet.</td></tr>';
 }
 function editTest(id){
+  if(!requirePerm("lab.write")) return;
   var t = findById(DB.labTests, id); if(!t) return;
   openModal("Edit Test — " + t.id, testFormHTML(t), function(){ if(saveTestForm(t)){ closeModal(); renderAll(); } });
 }
 function deleteTest(id){
+  if(!requirePerm("lab.write")) return;
   if(!confirm("Delete this test from the catalogue?")) return;
   DB.labTests = DB.labTests.filter(function(t){ return t.id!==id; }); saveDB(); renderAll();
 }
 function orderTest(){
+  if(!requirePerm("labOrders.create")) return;
   var pat = findById(DB.patients, el("loPatient").value);
   var test = findById(DB.labTests, el("loTest").value);
   if(!pat){ alert("Please add a patient first."); return; }
@@ -834,12 +1233,14 @@ function orderTest(){
   saveDB(); renderAll();
 }
 function completeLabOrder(id){
+  if(!requirePerm("labOrders.write")) return;
   var o = findById(DB.labOrders, id); if(!o) return;
   var r = prompt("Enter the result for " + o.testName + " (" + o.patientName + "):", o.result || "");
   if(r === null) return;
   o.result = r; o.status = "Completed"; saveDB(); renderAll();
 }
 function deleteLabOrder(id){
+  if(!requirePerm("labOrders.write")) return;
   if(!confirm("Delete this lab order?")) return;
   DB.labOrders = DB.labOrders.filter(function(o){ return o.id!==id; }); saveDB(); renderAll();
 }
@@ -895,6 +1296,7 @@ function renderSettings(){
   el("setCurrency").value = DB.settings.currency || "$";
 }
 function saveSettings(){
+  if(!requirePerm("settings.write")) return;
   DB.settings.clinicName = fieldVal("setClinicName") || DB.settings.clinicName;
   DB.settings.address = fieldVal("setAddress");
   DB.settings.phone = fieldVal("setPhone");
@@ -903,14 +1305,24 @@ function saveSettings(){
   el("settingsSaved").textContent = "Saved ✓";
 }
 function resetAllData(){
-  if(!confirm("Erase ALL data (patients, doctors, invoices, stock…) and start fresh? This cannot be undone.")) return;
-  if(store) store.removeItem(LS_KEY);
-  DB = defaultDB(); saveDB(); renderAll();
-  alert("All data has been reset.");
+  if(!requirePerm("data.manage")) return;
+  if(!confirm("Erase ALL data (patients, doctors, invoices, stock AND user accounts…) and start fresh? This cannot be undone.")) return;
+  if(store){ store.removeItem(LS_KEY); }
+  clearSession();
+  DB = defaultDB(); saveDB();
+  alert("All data has been reset. Create your Admin account to continue.");
+  authGate();
 }
 
 /* ---------------- Demo data ---------------- */
+/* Settings → "Load Demo Data" (Admin only): seeds the sample clinic and
+   also creates the four demo user accounts if they do not exist yet. */
 function loadDemoData(){
+  if(!requirePerm("data.manage")) return;
+  seedDemoData();
+  ensureDemoUsers().then(function(){ renderAll(); });
+}
+function seedDemoData(){
   if(DB.patients.length && !confirm("Loading demo data will ADD sample records to your current data. Continue?")) return;
   var t = todayStr();
   var docs = [
@@ -980,9 +1392,9 @@ function init(){
   el("modalCancel").addEventListener("click", closeModal);
   el("modalSave").addEventListener("click", function(){ if(modalOnSave) modalOnSave(); });
   el("modalOverlay").addEventListener("click", function(e){ if(e.target===el("modalOverlay")) closeModal(); });
-  el("btnAddPatient").addEventListener("click", function(){ openModal("Add Patient", patientFormHTML(null), function(){ if(savePatientForm(null)){ closeModal(); renderAll(); } }); });
+  el("btnAddPatient").addEventListener("click", function(){ if(!requirePerm("patients.write")) return; openModal("Add Patient", patientFormHTML(null), function(){ if(savePatientForm(null)){ closeModal(); renderAll(); } }); });
   el("patientSearch").addEventListener("input", renderPatients);
-  el("btnAddDoctor").addEventListener("click", function(){ openModal("Add Doctor", doctorFormHTML(null), function(){ if(saveDoctorForm(null)){ closeModal(); renderAll(); } }); });
+  el("btnAddDoctor").addEventListener("click", function(){ if(!requirePerm("doctors.write")) return; openModal("Add Doctor", doctorFormHTML(null), function(){ if(saveDoctorForm(null)){ closeModal(); renderAll(); } }); });
   el("bkPatient").addEventListener("change", function(){ el("bkNewFields").style.display = (el("bkPatient").value==="__new__") ? "flex" : "none"; });
   el("bkDate").value = todayStr();
   el("apptDateFilter").value = todayStr();
@@ -990,13 +1402,21 @@ function init(){
   el("apptDoctorFilter").addEventListener("change", renderAppointments);
   el("btnBook").addEventListener("click", bookAppointment);
   el("btnNewInvoice").addEventListener("click", openInvoiceForm);
-  el("btnAddMed").addEventListener("click", function(){ openModal("Add Medicine", medFormHTML(null), function(){ if(saveMedForm(null)){ closeModal(); renderAll(); } }); });
-  el("btnAddTest").addEventListener("click", function(){ openModal("Add Lab Test", testFormHTML(null), function(){ if(saveTestForm(null)){ closeModal(); renderAll(); } }); });
+  el("btnAddMed").addEventListener("click", function(){ if(!requirePerm("pharmacy.write")) return; openModal("Add Medicine", medFormHTML(null), function(){ if(saveMedForm(null)){ closeModal(); renderAll(); } }); });
+  el("btnAddTest").addEventListener("click", function(){ if(!requirePerm("lab.write")) return; openModal("Add Lab Test", testFormHTML(null), function(){ if(saveTestForm(null)){ closeModal(); renderAll(); } }); });
   el("btnOrderTest").addEventListener("click", orderTest);
   el("btnSaveSettings").addEventListener("click", saveSettings);
   el("btnLoadDemo").addEventListener("click", loadDemoData);
   el("btnResetData").addEventListener("click", resetAllData);
-  renderAll();
+  /* Auth wiring */
+  el("btnAddUser").addEventListener("click", addUserFromForm);
+  el("btnLogout").addEventListener("click", doLogout);
+  el("btnLogin").addEventListener("click", attemptLogin);
+  el("btnSetup").addEventListener("click", submitSetup);
+  el("btnExploreDemo").addEventListener("click", exploreDemo);
+  el("loginPassword").addEventListener("keydown", function(e){ if(e.key === "Enter") attemptLogin(); });
+  el("setupPassword2").addEventListener("keydown", function(e){ if(e.key === "Enter") submitSetup(); });
+  authGate();
 }
 if (typeof document !== "undefined" && typeof window !== "undefined"){
   if(document.readyState === "loading"){ document.addEventListener("DOMContentLoaded", init); }
