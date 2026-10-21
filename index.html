@@ -226,7 +226,9 @@ tr:hover td{background:#f8fafc}
         <div><h2>Doctors</h2><p>Doctor directory, departments and consultation fees.</p></div>
         <button class="btn" id="btnAddDoctor">+ Add Doctor</button>
       </div>
-      <div class="card"><div class="table-wrap"><table>
+      <div class="card">
+        <div class="field searchbar"><label>Search</label><input type="text" id="doctorSearch" placeholder="Search by name, department or qualification…"></div>
+        <div class="table-wrap"><table>
         <thead><tr><th>Name</th><th>Department</th><th>Qualification</th><th>Fee</th><th>Available</th><th>Actions</th></tr></thead>
         <tbody id="doctorsBody"></tbody>
       </table></div></div>
@@ -253,6 +255,8 @@ tr:hover td{background:#f8fafc}
         <div class="row" style="align-items:flex-end">
           <div class="field" style="max-width:220px"><label>Queue Date</label><input type="date" id="apptDateFilter"></div>
           <div class="field" style="max-width:260px"><label>Doctor Filter</label><select id="apptDoctorFilter"></select></div>
+          <div class="field" style="max-width:200px"><label>Status</label><select id="apptStatusFilter"><option value="">All statuses</option><option>Waiting</option><option>In Consultation</option><option>Done</option><option>Cancelled</option></select></div>
+          <div class="field searchbar"><label>Search</label><input type="text" id="apptSearch" placeholder="Patient, doctor or phone…"></div>
         </div>
         <div class="table-wrap"><table>
           <thead><tr><th>Token</th><th>Patient</th><th>Phone</th><th>Doctor</th><th>Status</th><th>Actions</th></tr></thead>
@@ -272,7 +276,12 @@ tr:hover td{background:#f8fafc}
         <div class="stat green"><div class="num" id="billTotalPaid">$0.00</div><div class="lbl">Collected</div></div>
         <div class="stat red"><div class="num" id="billTotalDue">$0.00</div><div class="lbl">Total Due</div></div>
       </div>
-      <div class="card"><div class="table-wrap"><table>
+      <div class="card">
+        <div class="row" style="align-items:flex-end">
+          <div class="field searchbar"><label>Search</label><input type="text" id="billSearch" placeholder="Search by invoice no. or patient…"></div>
+          <div class="field" style="max-width:200px"><label>Status</label><select id="billStatusFilter"><option value="">All statuses</option><option>Paid</option><option>Partial</option><option>Due</option></select></div>
+        </div>
+        <div class="table-wrap"><table>
         <thead><tr><th>Invoice</th><th>Date</th><th>Patient</th><th>Doctor</th><th>Total</th><th>Paid</th><th>Due</th><th>Status</th><th>Actions</th></tr></thead>
         <tbody id="invoicesBody"></tbody>
       </table></div></div>
@@ -284,7 +293,12 @@ tr:hover td{background:#f8fafc}
         <div><h2>Pharmacy</h2><p>Medicine stock, dispensing and expiry tracking.</p></div>
         <button class="btn" id="btnAddMed">+ Add Medicine</button>
       </div>
-      <div class="card"><div class="table-wrap"><table>
+      <div class="card">
+        <div class="row" style="align-items:flex-end">
+          <div class="field searchbar"><label>Search</label><input type="text" id="medSearch" placeholder="Search by name or generic…"></div>
+          <div class="field" style="max-width:200px"><label>Stock</label><select id="medStockFilter"><option value="">All stock</option><option value="in">In stock</option><option value="low">Low stock</option><option value="out">Out of stock</option><option value="expired">Expired</option></select></div>
+        </div>
+        <div class="table-wrap"><table>
         <thead><tr><th>Medicine</th><th>Generic</th><th>Stock</th><th>Unit Price</th><th>Expiry</th><th>Status</th><th>Dispense</th><th>Actions</th></tr></thead>
         <tbody id="medBody"></tbody>
       </table></div></div>
@@ -298,6 +312,7 @@ tr:hover td{background:#f8fafc}
       </div>
       <div class="card">
         <h3>Test Catalogue</h3>
+        <div class="field searchbar"><label>Search</label><input type="text" id="labTestSearch" placeholder="Search tests by name…"></div>
         <div class="table-wrap"><table>
           <thead><tr><th>Test Name</th><th>Price</th><th>Actions</th></tr></thead>
           <tbody id="labTestsBody"></tbody>
@@ -313,6 +328,10 @@ tr:hover td{background:#f8fafc}
       </div>
       <div class="card">
         <h3>Lab Orders</h3>
+        <div class="row" style="align-items:flex-end">
+          <div class="field searchbar"><label>Search</label><input type="text" id="labOrderSearch" placeholder="Patient or test name…"></div>
+          <div class="field" style="max-width:200px"><label>Status</label><select id="labOrderStatusFilter"><option value="">All statuses</option><option>Pending</option><option>Completed</option></select></div>
+        </div>
         <div class="table-wrap"><table>
           <thead><tr><th>Order</th><th>Date</th><th>Patient</th><th>Test</th><th>Result</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody id="labOrdersBody"></tbody>
@@ -323,6 +342,19 @@ tr:hover td{background:#f8fafc}
     <!-- REPORTS -->
     <section class="section" id="sec-reports">
       <div class="sec-head"><div><h2>Reports</h2><p id="repSubtitle">Collections and activity summaries.</p></div></div>
+      <div class="card">
+        <div class="row" style="align-items:flex-end">
+          <div class="field" style="max-width:220px"><label>Period</label><select id="repPeriod"><option value="all">All time</option><option value="today">Today</option><option value="7days">Last 7 days</option><option value="month">This month</option></select></div>
+          <span class="small-txt muted" id="repRangeLabel"></span>
+        </div>
+        <div class="grid-stats" style="margin-top:8px">
+          <div class="stat"><div class="num" id="repStatInv">$0.00</div><div class="lbl">Invoice Payments</div></div>
+          <div class="stat blue"><div class="num" id="repStatPha">$0.00</div><div class="lbl">Pharmacy Sales</div></div>
+          <div class="stat green"><div class="num" id="repStatTotal">$0.00</div><div class="lbl">Total Collection</div></div>
+          <div class="stat amber"><div class="num" id="repStatAppts">0</div><div class="lbl">Appointments</div></div>
+          <div class="stat red"><div class="num" id="repStatLab">0</div><div class="lbl">Lab Orders</div></div>
+        </div>
+      </div>
       <div class="card"><h3>Daily Collection (last 14 days)</h3>
         <div class="table-wrap"><table><thead><tr><th>Date</th><th>Invoice Payments</th><th>Pharmacy Sales</th><th>Total Collection</th></tr></thead>
         <tbody id="repDailyBody"></tbody></table></div></div>
@@ -494,6 +526,59 @@ function collectionFor(dateFrom, dateTo){
   DB.dispenses.forEach(function(x){ if(x.date>=dateFrom && x.date<=dateTo) pha += Number(x.amount)||0; });
   return { invoices: round2(inv), pharmacy: round2(pha), total: round2(inv+pha) };
 }
+
+/* ---------------- Search & filter predicates ----------------
+   Read-only UI helpers: the list renderers filter with these, the
+   underlying records are never modified by searching or filtering.
+   An empty query / empty filter value matches everything, so the
+   default views are exactly the unfiltered lists. */
+function doctorMatches(d, q){
+  q = (q || "").toLowerCase();
+  return !q || d.name.toLowerCase().indexOf(q) > -1 ||
+         (d.dept || "").toLowerCase().indexOf(q) > -1 || (d.qual || "").toLowerCase().indexOf(q) > -1;
+}
+function apptMatches(a, q, status){
+  if(status && a.status !== status) return false;
+  q = (q || "").toLowerCase();
+  if(!q) return true;
+  var pat = findById(DB.patients, a.patientId);
+  return (a.patientName || "").toLowerCase().indexOf(q) > -1 ||
+         (a.doctorName || "").toLowerCase().indexOf(q) > -1 ||
+         !!pat && (pat.phone || "").toLowerCase().indexOf(q) > -1;
+}
+function invMatches(x, q, status){
+  if(status && invoiceStatus(x) !== status) return false;
+  q = (q || "").toLowerCase();
+  return !q || x.id.toLowerCase().indexOf(q) > -1 || (x.patientName || "").toLowerCase().indexOf(q) > -1;
+}
+/* Stock state for the Pharmacy stock filter: Expired takes priority,
+   then Out of stock (qty 0), then Low stock (<= 10 via isLowStock). */
+function medStockState(m){
+  if(isExpired(m)) return "expired";
+  if((Number(m.qty) || 0) <= 0) return "out";
+  if(isLowStock(m)) return "low";
+  return "in";
+}
+function medMatches(m, q, stock){
+  if(stock && medStockState(m) !== stock) return false;
+  q = (q || "").toLowerCase();
+  return !q || m.name.toLowerCase().indexOf(q) > -1 || (m.generic || "").toLowerCase().indexOf(q) > -1;
+}
+function labOrderMatches(o, q, status){
+  if(status && o.status !== status) return false;
+  q = (q || "").toLowerCase();
+  return !q || (o.patientName || "").toLowerCase().indexOf(q) > -1 || (o.testName || "").toLowerCase().indexOf(q) > -1;
+}
+/* Reports period filter: returns {from, to} ISO date strings, or null
+   for "all" (no date restriction). */
+function reportRange(period){
+  var t = new Date(), d;
+  if(period === "today"){ var s = dateStr(t); return { from: s, to: s }; }
+  if(period === "7days"){ d = new Date(); d.setDate(d.getDate() - 6); return { from: dateStr(d), to: dateStr(t) }; }
+  if(period === "month"){ return { from: dateStr(new Date(t.getFullYear(), t.getMonth(), 1)), to: dateStr(new Date(t.getFullYear(), t.getMonth() + 1, 0)) }; }
+  return null;
+}
+function inPeriod(ds, range){ return !range || (ds >= range.from && ds <= range.to); }
 
 /* ================================================================
    AUTH — local user accounts & role-based access control (v1.2)
@@ -688,6 +773,24 @@ function openModal(title, bodyHTML, onSave, saveLabel){
 function closeModal(){ el("modalOverlay").classList.remove("open"); modalOnSave = null; }
 function fieldVal(id){ var n = el(id); return n ? n.value.trim() : ""; }
 
+/* Search/filter inputs per section. Opening a section from the sidebar
+   starts from a clean slate: searches are cleared and dropdown filters
+   return to their "All" value. The appointments Queue Date is NOT in
+   this list — it is navigation, not a filter, and keeps its value. */
+var SECTION_FILTERS = {
+  patients:     [["patientSearch", ""]],
+  doctors:      [["doctorSearch", ""]],
+  appointments: [["apptSearch", ""], ["apptStatusFilter", ""], ["apptDoctorFilter", ""]],
+  billing:      [["billSearch", ""], ["billStatusFilter", ""]],
+  pharmacy:     [["medSearch", ""], ["medStockFilter", ""]],
+  lab:          [["labTestSearch", ""], ["labOrderSearch", ""], ["labOrderStatusFilter", ""]],
+  reports:      [["repPeriod", "all"]]
+};
+function resetSectionFilters(name){
+  (SECTION_FILTERS[name] || []).forEach(function(pair){
+    var n = el(pair[0]); if(n) n.value = pair[1];
+  });
+}
 function showSection(name){
   /* Settings (clinic profile, user accounts, data reset) is Admin-only:
      other roles never see the section, even if triggered directly. */
@@ -695,6 +798,7 @@ function showSection(name){
   var secs = document.querySelectorAll(".section");
   secs.forEach(function(s){ s.classList.remove("active"); });
   el("sec-" + name).classList.add("active");
+  resetSectionFilters(name);
   var btns = document.querySelectorAll("#mainNav button");
   btns.forEach(function(b){ b.classList.toggle("active", b.getAttribute("data-nav")===name); });
   renderAll();
@@ -913,7 +1017,7 @@ function renderPatients(){
       (can("patients.write") ?
         '<button class="btn small secondary" onclick="editPatient(\'' + p.id + '\')">Edit</button>' +
         '<button class="btn small danger" onclick="deletePatient(\'' + p.id + '\')">Delete</button>' : "") + "</div></td></tr>";
-  }).join("") : '<tr><td colspan="6" class="empty">No patients found.</td></tr>';
+  }).join("") : '<tr><td colspan="6" class="empty">' + (q ? "No matching records." : "No patients found.") + "</td></tr>";
 }
 function editPatient(id){
   if(!requirePerm("patients.write")) return;
@@ -963,12 +1067,14 @@ function saveDoctorForm(existing){
   saveDB(); return true;
 }
 function renderDoctors(){
-  el("doctorsBody").innerHTML = DB.doctors.length ? DB.doctors.map(function(d){
+  var q = el("doctorSearch").value || "";
+  var rows = DB.doctors.filter(function(d){ return doctorMatches(d, q); });
+  el("doctorsBody").innerHTML = rows.length ? rows.map(function(d){
     return "<tr><td><b>" + esc(d.name) + "</b></td><td>" + esc(d.dept||"—") + "</td><td>" + esc(d.qual||"—") +
       "</td><td>" + money(d.fee) + "</td><td>" + esc(d.days||"") + (d.time ? "<br><span class='muted small-txt'>" + esc(d.time) + "</span>" : "") +
       '</td><td>' + (can("doctors.write") ? '<div class="actions"><button class="btn small secondary" onclick="editDoctor(\'' + d.id + '\')">Edit</button>' +
       '<button class="btn small danger" onclick="deleteDoctor(\'' + d.id + '\')">Delete</button></div>' : '<span class="muted small-txt">View only</span>') + "</td></tr>";
-  }).join("") : '<tr><td colspan="6" class="empty">No doctors yet. Add your first doctor.</td></tr>';
+  }).join("") : '<tr><td colspan="6" class="empty">' + (DB.doctors.length ? "No matching records." : "No doctors yet. Add your first doctor.") + "</td></tr>";
 }
 function editDoctor(id){
   if(!requirePerm("doctors.write")) return;
@@ -1022,7 +1128,8 @@ function bookAppointment(){
 function renderAppointments(){
   var date = el("apptDateFilter").value || todayStr();
   var docF = el("apptDoctorFilter").value || "";
-  var rows = DB.appointments.filter(function(a){ return a.date===date && (!docF || a.doctorId===docF); })
+  var q = el("apptSearch").value || "", stF = el("apptStatusFilter").value || "";
+  var rows = DB.appointments.filter(function(a){ return a.date===date && (!docF || a.doctorId===docF) && apptMatches(a, q, stF); })
                             .sort(function(a,b){ return (a.doctorName===b.doctorName) ? a.token-b.token : (a.doctorName<b.doctorName?-1:1); });
   var statuses = ["Waiting","In Consultation","Done","Cancelled"];
   el("apptQueueBody").innerHTML = rows.length ? rows.map(function(a){
@@ -1031,7 +1138,7 @@ function renderAppointments(){
     return "<tr><td><b>#" + a.token + "</b></td><td>" + esc(a.patientName) + "</td><td>" + esc(pat ? pat.phone : "—") +
       "</td><td>" + esc(a.doctorName) + '</td><td><select onchange="setApptStatus(\'' + a.id + '\', this.value)" style="width:auto;padding:5px 8px"' + (can("appointments.write") ? "" : " disabled") + ">" + opts + "</select></td>" +
       "<td>" + (can("appointments.write") ? '<button class="btn small danger" onclick="deleteAppt(\'' + a.id + '\')">Delete</button>' : '<span class="muted small-txt">View only</span>') + "</td></tr>";
-  }).join("") : '<tr><td colspan="6" class="empty">No appointments for this date.</td></tr>';
+  }).join("") : '<tr><td colspan="6" class="empty">' + ((q || stF || docF) ? "No matching records." : "No appointments for this date.") + "</td></tr>";
 }
 function setApptStatus(id, st){
   if(!requirePerm("appointments.write")){ renderAppointments(); return; }
@@ -1114,7 +1221,9 @@ function renderBilling(){
   el("billTotalBilled").textContent = money(tb);
   el("billTotalPaid").textContent = money(tp);
   el("billTotalDue").textContent = money(round2(tb - tp));
-  var rows = DB.invoices.slice().sort(function(a,b){ return (a.date===b.date) ? (b.id<a.id?-1:1) : (a.date<b.date?1:-1); });
+  var bq = el("billSearch").value || "", bs = el("billStatusFilter").value || "";
+  var rows = DB.invoices.filter(function(x){ return invMatches(x, bq, bs); })
+                        .sort(function(a,b){ return (a.date===b.date) ? (b.id<a.id?-1:1) : (a.date<b.date?1:-1); });
   el("invoicesBody").innerHTML = rows.length ? rows.map(function(x){
     var st = invoiceStatus(x);
     return "<tr><td><b>" + x.id + "</b></td><td>" + esc(x.date) + "</td><td>" + esc(x.patientName) + "</td><td>" + esc(x.doctorName||"—") +
@@ -1123,7 +1232,7 @@ function renderBilling(){
       (can("billing.write") ?
         '<button class="btn small secondary" onclick="receivePayment(\'' + x.id + '\')">Pay</button>' +
         '<button class="btn small danger" onclick="deleteInvoice(\'' + x.id + '\')">Delete</button>' : "") + "</div></td></tr>";
-  }).join("") : '<tr><td colspan="9" class="empty">No invoices yet.</td></tr>';
+  }).join("") : '<tr><td colspan="9" class="empty">' + (DB.invoices.length ? "No matching records." : "No invoices yet.") + "</td></tr>";
 }
 function receivePayment(id){
   if(!requirePerm("billing.write")) return;
@@ -1191,7 +1300,9 @@ function saveMedForm(existing){
   saveDB(); return true;
 }
 function renderPharmacy(){
-  el("medBody").innerHTML = DB.medicines.length ? DB.medicines.map(function(m){
+  var mq = el("medSearch").value || "", ms = el("medStockFilter").value || "";
+  var medRows = DB.medicines.filter(function(m){ return medMatches(m, mq, ms); });
+  el("medBody").innerHTML = medRows.length ? medRows.map(function(m){
     var badges = "";
     if(isExpired(m)) badges += ' <span class="badge b-exp">Expired</span>';
     else if(isLowStock(m)) badges += ' <span class="badge b-low">Low stock</span>';
@@ -1202,7 +1313,7 @@ function renderPharmacy(){
       '<button class="btn small" onclick="dispenseMed(\'' + m.id + '\')">Sell</button></div>' : '<span class="muted small-txt">—</span>') + "</td>" +
       "<td>" + (can("pharmacy.write") ? '<div class="actions"><button class="btn small secondary" onclick="editMed(\'' + m.id + '\')">Edit</button>' +
       '<button class="btn small danger" onclick="deleteMed(\'' + m.id + '\')">Delete</button></div>' : '<span class="muted small-txt">View only</span>') + "</td></tr>";
-  }).join("") : '<tr><td colspan="8" class="empty">No medicines in stock yet.</td></tr>';
+  }).join("") : '<tr><td colspan="8" class="empty">' + (DB.medicines.length ? "No matching records." : "No medicines in stock yet.") + "</td></tr>";
 }
 function editMed(id){
   if(!requirePerm("pharmacy.write")) return;
@@ -1242,18 +1353,22 @@ function saveTestForm(existing){
   saveDB(); return true;
 }
 function renderLab(){
-  el("labTestsBody").innerHTML = DB.labTests.length ? DB.labTests.map(function(t){
+  var tq = (el("labTestSearch").value || "").toLowerCase();
+  var testRows = DB.labTests.filter(function(t){ return !tq || t.name.toLowerCase().indexOf(tq) > -1; });
+  el("labTestsBody").innerHTML = testRows.length ? testRows.map(function(t){
     return "<tr><td><b>" + esc(t.name) + "</b></td><td>" + money(t.price) + "</td><td>" + (can("lab.write") ? '<div class="actions">' +
       '<button class="btn small secondary" onclick="editTest(\'' + t.id + '\')">Edit</button>' +
       '<button class="btn small danger" onclick="deleteTest(\'' + t.id + '\')">Delete</button></div>' : '<span class="muted small-txt">View only</span>') + "</td></tr>";
-  }).join("") : '<tr><td colspan="3" class="empty">No tests in the catalogue yet.</td></tr>';
-  el("labOrdersBody").innerHTML = DB.labOrders.length ? DB.labOrders.slice().reverse().map(function(o){
+  }).join("") : '<tr><td colspan="3" class="empty">' + (DB.labTests.length ? "No matching records." : "No tests in the catalogue yet.") + "</td></tr>";
+  var oq = el("labOrderSearch").value || "", os = el("labOrderStatusFilter").value || "";
+  var orderRows = DB.labOrders.filter(function(o){ return labOrderMatches(o, oq, os); });
+  el("labOrdersBody").innerHTML = orderRows.length ? orderRows.slice().reverse().map(function(o){
     return "<tr><td><b>" + o.id + "</b></td><td>" + esc(o.date) + "</td><td>" + esc(o.patientName) + "</td><td>" + esc(o.testName) +
       "</td><td>" + esc(o.result||"—") + "</td><td>" + statusBadge(o.status) + '</td><td><div class="actions">' +
       (o.status==="Pending" && can("labOrders.write") ? '<button class="btn small" onclick="completeLabOrder(\'' + o.id + '\')">Enter Result</button>' : "") +
       '<button class="btn small ghost" onclick="printLabReport(\'' + o.id + '\')">Report</button>' +
       (can("labOrders.write") ? '<button class="btn small danger" onclick="deleteLabOrder(\'' + o.id + '\')">Delete</button>' : "") + "</div></td></tr>";
-  }).join("") : '<tr><td colspan="7" class="empty">No lab orders yet.</td></tr>';
+  }).join("") : '<tr><td colspan="7" class="empty">' + (DB.labOrders.length ? "No matching records." : "No lab orders yet.") + "</td></tr>";
 }
 function editTest(id){
   if(!requirePerm("lab.write")) return;
@@ -1303,6 +1418,21 @@ function printLabReport(id){
 function renderReports(){
   var sub = el("repSubtitle");
   if(sub) sub.textContent = "Collections and activity summaries." + (DB.settings.currencyCode ? " All amounts in " + DB.settings.currencyCode + "." : "");
+  /* Period overview: the revenue summary figures and the appointment /
+     lab-order counts below respect the Period filter, as do the
+     "Appointments by Doctor" totals and "Top Medicines" figures further
+     down. The Daily (last 14 days) and Monthly tables are inherently
+     period-based breakdowns and are not affected by the filter. */
+  var periodEl = el("repPeriod");
+  var range = reportRange(periodEl ? periodEl.value : "all");
+  var pc = range ? collectionFor(range.from, range.to) : collectionFor("0000-01-01", "9999-12-31");
+  el("repStatInv").textContent = money(pc.invoices);
+  el("repStatPha").textContent = money(pc.pharmacy);
+  el("repStatTotal").textContent = money(pc.total);
+  el("repStatAppts").textContent = DB.appointments.filter(function(a){ return inPeriod(a.date, range); }).length;
+  el("repStatLab").textContent = DB.labOrders.filter(function(o){ return inPeriod(o.date, range); }).length;
+  var rl = el("repRangeLabel");
+  if(rl) rl.textContent = range ? ("Showing: " + range.from + " to " + range.to) : "Showing: all time";
   var daily = "", i, d, c;
   for(i=0;i<14;i++){
     d = new Date(); d.setDate(d.getDate()-i);
@@ -1321,16 +1451,16 @@ function renderReports(){
   }).join("") : '<tr><td colspan="4" class="empty">No collections yet.</td></tr>';
   var t = todayStr();
   el("repDoctorBody").innerHTML = DB.doctors.length ? DB.doctors.map(function(doc){
-    var total = DB.appointments.filter(function(a){ return a.doctorId===doc.id; }).length;
+    var total = DB.appointments.filter(function(a){ return a.doctorId===doc.id && inPeriod(a.date, range); }).length;
     var today = DB.appointments.filter(function(a){ return a.doctorId===doc.id && a.date===t; }).length;
     return "<tr><td><b>" + esc(doc.name) + "</b></td><td>" + esc(doc.dept||"—") + "</td><td>" + total + "</td><td>" + today + "</td></tr>";
   }).join("") : '<tr><td colspan="4" class="empty">No doctors yet.</td></tr>';
   var agg = {};
-  DB.dispenses.forEach(function(x){ agg[x.name] = agg[x.name]||{qty:0,amt:0}; agg[x.name].qty += x.qty; agg[x.name].amt += x.amount; });
+  DB.dispenses.forEach(function(x){ if(!inPeriod(x.date, range)) return; agg[x.name] = agg[x.name]||{qty:0,amt:0}; agg[x.name].qty += x.qty; agg[x.name].amt += x.amount; });
   var top = Object.keys(agg).map(function(k){ return { name:k, qty:agg[k].qty, amt:agg[k].amt }; }).sort(function(a,b){ return b.qty-a.qty; }).slice(0,10);
   el("repMedBody").innerHTML = top.length ? top.map(function(x){
     return "<tr><td><b>" + esc(x.name) + "</b></td><td>" + x.qty + "</td><td>" + money(x.amt) + "</td></tr>";
-  }).join("") : '<tr><td colspan="3" class="empty">No dispensing recorded yet.</td></tr>';
+  }).join("") : '<tr><td colspan="3" class="empty">' + (DB.dispenses.length && range ? "No matching records." : "No dispensing recorded yet.") + "</td></tr>";
 }
 
 /* ---------------- Country → currency presets ----------------
@@ -1490,14 +1620,25 @@ function init(){
   el("modalOverlay").addEventListener("click", function(e){ if(e.target===el("modalOverlay")) closeModal(); });
   el("btnAddPatient").addEventListener("click", function(){ if(!requirePerm("patients.write")) return; openModal("Add Patient", patientFormHTML(null), function(){ if(savePatientForm(null)){ closeModal(); renderAll(); } }); });
   el("patientSearch").addEventListener("input", renderPatients);
+  el("doctorSearch").addEventListener("input", renderDoctors);
   el("btnAddDoctor").addEventListener("click", function(){ if(!requirePerm("doctors.write")) return; openModal("Add Doctor", doctorFormHTML(null), function(){ if(saveDoctorForm(null)){ closeModal(); renderAll(); } }); });
   el("bkPatient").addEventListener("change", function(){ el("bkNewFields").style.display = (el("bkPatient").value==="__new__") ? "flex" : "none"; });
   el("bkDate").value = todayStr();
   el("apptDateFilter").value = todayStr();
   el("apptDateFilter").addEventListener("change", renderAppointments);
   el("apptDoctorFilter").addEventListener("change", renderAppointments);
+  el("apptSearch").addEventListener("input", renderAppointments);
+  el("apptStatusFilter").addEventListener("change", renderAppointments);
   el("btnBook").addEventListener("click", bookAppointment);
   el("btnNewInvoice").addEventListener("click", openInvoiceForm);
+  el("billSearch").addEventListener("input", renderBilling);
+  el("billStatusFilter").addEventListener("change", renderBilling);
+  el("medSearch").addEventListener("input", renderPharmacy);
+  el("medStockFilter").addEventListener("change", renderPharmacy);
+  el("labTestSearch").addEventListener("input", renderLab);
+  el("labOrderSearch").addEventListener("input", renderLab);
+  el("labOrderStatusFilter").addEventListener("change", renderLab);
+  el("repPeriod").addEventListener("change", renderReports);
   el("btnAddMed").addEventListener("click", function(){ if(!requirePerm("pharmacy.write")) return; openModal("Add Medicine", medFormHTML(null), function(){ if(saveMedForm(null)){ closeModal(); renderAll(); } }); });
   el("btnAddTest").addEventListener("click", function(){ if(!requirePerm("lab.write")) return; openModal("Add Lab Test", testFormHTML(null), function(){ if(saveTestForm(null)){ closeModal(); renderAll(); } }); });
   el("btnOrderTest").addEventListener("click", orderTest);
