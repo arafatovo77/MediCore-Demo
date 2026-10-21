@@ -145,8 +145,7 @@ tr:hover td{background:#f8fafc}
 
     <div class="auth-divider">just looking around?</div>
     <button class="btn secondary" id="btnExploreDemo" style="width:100%">Explore the demo</button>
-    <p class="small-txt muted" style="margin-top:10px;text-align:center">Loads the sample clinic and signs you in as the demo Admin.<br>
-    Demo accounts — Admin: <b>admin / admin123</b> · Receptionist: <b>reception / reception123</b> · Pharmacist: <b>pharmacy / pharma123</b> · Lab Technician: <b>lab / labtech123</b></p>
+    <p class="small-txt muted" style="margin-top:10px;text-align:center">Demo accounts: click “Explore the demo” above — it signs you in as the demo Admin automatically. Demo usernames/passwords are documented in README.md.</p>
   </div>
 </div>
 
@@ -368,7 +367,7 @@ tr:hover td{background:#f8fafc}
         </div>
         <button class="btn" id="btnAddUser">Add User</button>
         <span class="small-txt muted" id="userMsg" style="margin-left:10px"></span>
-        <p class="small-txt muted" style="margin-top:10px">Demo accounts (created only by “Load Demo Data” / “Explore the demo”): admin / admin123 · reception / reception123 · pharmacy / pharma123 · lab / labtech123 — delete these accounts before real use; a DEMO MODE banner stays visible in the app while any of them exists.</p>
+        <p class="small-txt muted" style="margin-top:10px">Demo accounts (created only by “Load Demo Data” / “Explore the demo”; their usernames/passwords are documented in README.md) — delete these accounts before real use; a DEMO MODE banner stays visible in the app while any of them exists.</p>
       </div>
       <div class="card">
         <h3>Demo &amp; Data</h3>
@@ -612,9 +611,13 @@ function sessionUser(){
 }
 
 /* ---- Permission checks ---- */
+/* Permissions are resolved from the LIVE user record (via
+   sessionUser()), never from the role stored in the session object:
+   editing the stored session cannot escalate privileges, and role
+   changes or account deletion by an Admin take effect immediately. */
 function can(perm){
-  var s = getSession(); if(!s) return false;
-  var list = PERMS[s.role] || [];
+  var u = sessionUser(); if(!u) return false;
+  var list = PERMS[u.role] || [];
   return list.indexOf(perm) > -1;
 }
 /* Guard used at the START of every mutating handler: returns true when
@@ -622,8 +625,8 @@ function can(perm){
    message and returns false so the handler aborts without changes. */
 function requirePerm(perm){
   if(can(perm)) return true;
-  var s = getSession();
-  alert("Access denied — " + (s ? ("the " + s.role + " role") : "you") + " cannot perform this action (" + perm + ").");
+  var u = sessionUser();
+  alert("Access denied — " + (u ? ("the " + u.role + " role") : "you") + " cannot perform this action (" + perm + ").");
   return false;
 }
 
@@ -778,9 +781,9 @@ function exploreDemo(){
    function via can(); the guards in the handlers enforce the same
    rules even if a hidden control is somehow triggered. */
 function applyPermissions(){
-  var s = getSession(); if(!s) return;
-  el("currentUserName").textContent = s.username;
-  el("currentUserRole").textContent = s.role;
+  var u = sessionUser(); if(!u) return;
+  el("currentUserName").textContent = u.username;
+  el("currentUserRole").textContent = u.role;
   document.querySelectorAll("#mainNav button").forEach(function(b){
     b.style.display = (b.getAttribute("data-nav") === "settings" && !can("settings.write")) ? "none" : "";
   });
