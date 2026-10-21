@@ -190,6 +190,16 @@ tr:hover td{background:#f8fafc}
         <div class="stat amber"><div class="num" id="statRevenue">$0.00</div><div class="lbl">Revenue Today</div></div>
         <div class="stat red"><div class="num" id="statLowStock">0</div><div class="lbl">Low-Stock Alerts</div></div>
       </div>
+      <!-- Pharmacy profit panel: filled and shown by renderDashboard()
+           ONLY for Admin users; stays hidden for every other role. -->
+      <div class="card" id="dashProfitCard" style="display:none;margin-bottom:14px">
+        <h3>💰 Pharmacy Profit <span class="muted small-txt">(Admin only)</span></h3>
+        <div class="grid-stats" style="margin-bottom:0">
+          <div class="stat green"><div class="num" id="dashProfitToday">$0.00</div><div class="lbl">Profit Today</div></div>
+          <div class="stat blue"><div class="num" id="dashProfitMonth">$0.00</div><div class="lbl">Profit This Month</div></div>
+          <div class="stat"><div class="num" id="dashProfitAll">$0.00</div><div class="lbl">Profit All Time</div></div>
+        </div>
+      </div>
       <div class="row">
         <div class="card" style="flex:2;min-width:280px">
           <h3>Recent Appointments</h3>
@@ -296,7 +306,8 @@ tr:hover td{background:#f8fafc}
       <div class="card">
         <div class="row" id="medQuickAdd" style="align-items:flex-end;margin-bottom:10px">
           <div class="field searchbar"><label>Quick add — Medicine name</label><input type="text" id="qaName" list="medNameList" placeholder="Start typing a medicine name…" autocomplete="off"></div>
-          <div class="field" style="max-width:130px"><label>Price</label><input type="number" id="qaPrice" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></div>
+          <div class="field" style="max-width:130px"><label>Sell Price</label><input type="number" id="qaPrice" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></div>
+          <div class="field" style="max-width:130px"><label>Buy Price (optional)</label><input type="number" id="qaCost" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></div>
           <div class="field" style="max-width:110px"><label>Quantity</label><input type="number" id="qaQty" min="1" step="1" inputmode="numeric" placeholder="Qty"></div>
           <div class="field" style="max-width:170px"><label>Expiry (optional)</label><input type="date" id="qaExpiry"></div>
           <div class="field" style="align-self:flex-end"><button class="btn" id="btnQuickAdd" style="width:100%">Add</button></div>
@@ -307,7 +318,7 @@ tr:hover td{background:#f8fafc}
           <div class="field" style="max-width:200px"><label>Stock</label><select id="medStockFilter"><option value="">All stock</option><option value="in">In stock</option><option value="low">Low stock</option><option value="out">Out of stock</option><option value="expired">Expired</option></select></div>
         </div>
         <div class="table-wrap"><table>
-        <thead><tr><th>Medicine</th><th>Generic</th><th>Stock</th><th>Unit Price</th><th>Expiry</th><th>Status</th><th>Dispense</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Medicine</th><th>Generic</th><th>Stock</th><th>Buy Price</th><th>Sell Price</th><th>Expiry</th><th>Status</th><th>Dispense</th><th>Actions</th></tr></thead>
         <tbody id="medBody"></tbody>
       </table></div></div>
     </section>
@@ -361,6 +372,9 @@ tr:hover td{background:#f8fafc}
           <div class="stat green"><div class="num" id="repStatTotal">$0.00</div><div class="lbl">Total Collection</div></div>
           <div class="stat amber"><div class="num" id="repStatAppts">0</div><div class="lbl">Appointments</div></div>
           <div class="stat red"><div class="num" id="repStatLab">0</div><div class="lbl">Lab Orders</div></div>
+          <!-- Pharmacy profit for the selected period — Admin only;
+               renderReports() shows it and fills it, other roles never see it. -->
+          <div class="stat green" id="repStatProfitCard" style="display:none"><div class="num" id="repStatProfit">$0.00</div><div class="lbl">Pharmacy Profit (Admin)</div></div>
         </div>
       </div>
       <div class="card"><h3>Daily Collection (last 14 days)</h3>
@@ -485,6 +499,10 @@ function loadDB(){
        currencyCode in settings — default them to "not chosen". */
     if(!DB.settings.country) DB.settings.country = "";
     if(!DB.settings.currencyCode) DB.settings.currencyCode = "";
+    /* Medicines saved before buy/sell pricing have no costPrice — the
+       buy price is then "unknown" (stored as ""), and the pharmacy
+       profit rule below counts zero profit for sales of that medicine. */
+    if(Array.isArray(DB.medicines)) DB.medicines.forEach(function(m){ if(m.costPrice == null) m.costPrice = ""; });
   }catch(e){ /* corrupted storage -> keep defaults */ }
 }
 function saveDB(){ if(store){ try{ store.setItem(LS_KEY, JSON.stringify(DB)); }catch(e){} } }
@@ -534,6 +552,32 @@ function collectionFor(dateFrom, dateTo){
   DB.invoices.forEach(function(x){ if(x.date>=dateFrom && x.date<=dateTo) inv += Number(x.paid)||0; });
   DB.dispenses.forEach(function(x){ if(x.date>=dateFrom && x.date<=dateTo) pha += Number(x.amount)||0; });
   return { invoices: round2(inv), pharmacy: round2(pha), total: round2(inv+pha) };
+}
+/* Pharmacy profit for a single dispense record: (unitPrice − unitCost)
+   × qty. Both prices are snapshotted onto the dispense at the moment of
+   sale (see dispenseMed), so later price edits never rewrite past
+   profit. PROFIT RULE: when the medicine had no buy price recorded,
+   unitCost was snapshotted EQUAL to unitPrice, so that sale contributes
+   exactly zero profit while its revenue still counts in full. Dispense
+   records saved before this feature have no snapshots — their unitCost
+   likewise falls back to the sale price, contributing zero profit. */
+function dispenseProfit(d){
+  var qty = Number(d.qty) || 0;
+  var up = (d.unitPrice != null) ? Number(d.unitPrice) : (qty ? (Number(d.amount) || 0) / qty : 0);
+  var uc = (d.unitCost != null) ? Number(d.unitCost) : up;
+  return round2((up - uc) * qty);
+}
+function pharmacyProfit(dateFrom, dateTo){
+  var sum = 0;
+  DB.dispenses.forEach(function(d){ if(d.date>=dateFrom && d.date<=dateTo) sum += dispenseProfit(d); });
+  return round2(sum);
+}
+/* Profit figures are owner-only information: they are displayed only
+   when the signed-in user's LIVE role (via sessionUser(), the same
+   source can() uses) is Admin. */
+function isAdminUser(){
+  var u = sessionUser();
+  return !!u && u.role === "Admin";
 }
 
 /* ---------------- Search & filter predicates ----------------
@@ -1000,6 +1044,20 @@ function renderDashboard(){
     return "<tr><td><b>#" + a.token + "</b></td><td>" + esc(a.patientName) + "</td><td>" + esc(a.doctorName) +
            "</td><td>" + esc(a.date) + "</td><td>" + statusBadge(a.status) + "</td></tr>";
   }).join("") : '<tr><td colspan="5" class="empty">No appointments yet.</td></tr>';
+  /* Pharmacy profit panel — Admin only. For any other role the panel
+     stays hidden and the figures are never written into the DOM. */
+  var profitCard = el("dashProfitCard");
+  if(profitCard){
+    if(isAdminUser()){
+      profitCard.style.display = "";
+      var mRange = reportRange("month");
+      el("dashProfitToday").textContent = money(pharmacyProfit(t, t));
+      el("dashProfitMonth").textContent = money(pharmacyProfit(mRange.from, mRange.to));
+      el("dashProfitAll").textContent = money(pharmacyProfit("0000-01-01", "9999-12-31"));
+    } else {
+      profitCard.style.display = "none";
+    }
+  }
 }
 
 /* ---------------- Patients ---------------- */
@@ -1415,15 +1473,18 @@ function medFormHTML(m){
   return '<div class="field"><label>Medicine Name</label><input id="f_mName" list="medNameList" value="' + esc(m.name||"") + '"></div>' +
     '<div class="field"><label>Generic</label><input id="f_mGeneric" value="' + esc(m.generic||"") + '"></div>' +
     '<div class="row"><div class="field"><label>Stock Qty</label><input id="f_mQty" type="number" min="0" step="1" inputmode="numeric" value="' + (m.qty!=null?m.qty:"") + '"></div>' +
-    '<div class="field"><label>Unit Price</label><input id="f_mPrice" type="number" min="0" step="0.01" inputmode="decimal" value="' + (m.price!=null?m.price:"") + '"></div>' +
-    '<div class="field"><label>Expiry Date</label><input id="f_mExpiry" type="date" value="' + esc(m.expiry||"") + '"></div></div>';
+    '<div class="field"><label>Expiry Date</label><input id="f_mExpiry" type="date" value="' + esc(m.expiry||"") + '"></div></div>' +
+    '<div class="row"><div class="field"><label>Sell Price</label><input id="f_mPrice" type="number" min="0" step="0.01" inputmode="decimal" value="' + (m.price!=null?m.price:"") + '"></div>' +
+    '<div class="field"><label>Buy Price (optional)</label><input id="f_mCost" type="number" min="0" step="0.01" inputmode="decimal" value="' + (m.costPrice!=null && m.costPrice!=="" ? m.costPrice : "") + '"></div></div>';
 }
 function saveMedForm(existing){
   if(!requirePerm("pharmacy.write")) return false;
   var name = fieldVal("f_mName");
   if(!name){ alert("Medicine name is required."); return false; }
+  var costRaw = fieldVal("f_mCost");
+  if(costRaw !== "" && (isNaN(Number(costRaw)) || Number(costRaw) < 0)){ alert("Buy price must be a valid number."); return false; }
   var data = { name:name, generic:fieldVal("f_mGeneric"), qty:Number(fieldVal("f_mQty"))||0,
-               price:round2(fieldVal("f_mPrice")), expiry:fieldVal("f_mExpiry") };
+               price:round2(fieldVal("f_mPrice")), costPrice:(costRaw === "" ? "" : round2(costRaw)), expiry:fieldVal("f_mExpiry") };
   if(existing){ Object.assign(existing, data); }
   else { data.id = CONFIG.ID_PREFIXES.med + (DB.counters.med++); DB.medicines.push(data); }
   saveDB(); return true;
@@ -1453,12 +1514,19 @@ function quickAddMed(){
   if(qtyRaw === "" || isNaN(Number(qtyRaw)) || Number(qtyRaw) < 1){ alert("Quantity is required."); el("qaQty").focus(); return; }
   var expiry = fieldVal("qaExpiry");
   if(expiry && !/^\d{4}-\d{2}-\d{2}$/.test(expiry)){ alert("Expiry must be a valid date."); el("qaExpiry").focus(); return; }
+  /* Buy price is optional: empty means "unknown" (stored as ""), and
+     sales of this medicine then count zero profit (see dispenseProfit). */
+  var costRaw = fieldVal("qaCost"), costPrice = "";
+  if(costRaw !== ""){
+    if(isNaN(Number(costRaw)) || Number(costRaw) < 0){ alert("Buy price must be a valid number."); el("qaCost").focus(); return; }
+    costPrice = round2(costRaw);
+  }
   /* A recognised brand name brings its generic with it. */
   var sug = medSuggestionFor(name);
   DB.medicines.push({ id: CONFIG.ID_PREFIXES.med + (DB.counters.med++), name: sug ? sug.name : name, generic: sug ? sug.generic : "",
-                      qty: Math.floor(Number(qtyRaw)), price: round2(priceRaw), expiry: expiry });
+                      qty: Math.floor(Number(qtyRaw)), price: round2(priceRaw), costPrice: costPrice, expiry: expiry });
   saveDB(); renderAll();
-  el("qaName").value = ""; el("qaPrice").value = ""; el("qaQty").value = ""; el("qaExpiry").value = "";
+  el("qaName").value = ""; el("qaPrice").value = ""; el("qaCost").value = ""; el("qaQty").value = ""; el("qaExpiry").value = "";
   el("qaName").focus();
   var b = el("btnQuickAdd");
   if(b){ var t = b.textContent; b.textContent = "Added ✓"; setTimeout(function(){ b.textContent = t; }, 1200); }
@@ -1489,14 +1557,15 @@ function renderPharmacy(){
     if(isExpired(m)) badges += ' <span class="badge b-exp">Expired</span>';
     else if(isLowStock(m)) badges += ' <span class="badge b-low">Low stock</span>';
     else badges += ' <span class="badge b-ok">In stock</span>';
-    return "<tr><td><b>" + esc(m.name) + "</b></td><td>" + esc(m.generic||"—") + "</td><td>" + m.qty + "</td><td>" + money(m.price) +
+    return "<tr><td><b>" + esc(m.name) + "</b></td><td>" + esc(m.generic||"—") + "</td><td>" + m.qty + "</td><td>" +
+      (m.costPrice === "" || m.costPrice == null ? "—" : money(m.costPrice)) + "</td><td>" + money(m.price) +
       "</td><td>" + esc(m.expiry||"—") + "</td><td>" + badges + "</td><td>" + (can("pharmacy.dispense") ? '<div class="actions">' +
       '<input type="number" min="1" value="1" id="disp_' + m.id + '" style="width:64px;padding:5px 7px">' +
       '<button class="btn small" onclick="dispenseMed(\'' + m.id + '\')">Sell</button></div>' : '<span class="muted small-txt">—</span>') + "</td>" +
       "<td>" + (can("pharmacy.write") ? '<div class="actions"><button class="btn small secondary" onclick="restockMed(\'' + m.id + '\')">Restock</button>' +
       '<button class="btn small secondary" onclick="editMed(\'' + m.id + '\')">Edit</button>' +
       '<button class="btn small danger" onclick="deleteMed(\'' + m.id + '\')">Delete</button></div>' : '<span class="muted small-txt">View only</span>') + "</td></tr>";
-  }).join("") : '<tr><td colspan="8" class="empty">' + (DB.medicines.length ? "No matching records." : "No medicines in stock yet.") + "</td></tr>";
+  }).join("") : '<tr><td colspan="9" class="empty">' + (DB.medicines.length ? "No matching records." : "No medicines in stock yet.") + "</td></tr>";
 }
 function editMed(id){
   if(!requirePerm("pharmacy.write")) return;
@@ -1516,7 +1585,14 @@ function dispenseMed(id){
   if(q <= 0){ alert("Enter a quantity to dispense."); return; }
   if(q > m.qty){ alert("Only " + m.qty + " in stock."); return; }
   m.qty -= q;
-  DB.dispenses.push({ id:CONFIG.ID_PREFIXES.dispense + (DB.counters.dispense++), date:todayStr(), medId:m.id, name:m.name, qty:q, amount:round2(q*m.price) });
+  /* Snapshot the sell price (unitPrice) and the buy price (unitCost)
+     at the moment of sale, so later price edits never rewrite past
+     profit. When the medicine has NO buy price recorded, unitCost
+     snapshots EQUAL to unitPrice: that sale then contributes exactly
+     zero profit (see dispenseProfit), while its revenue counts fully. */
+  var unitPrice = round2(m.price);
+  var unitCost = (m.costPrice === "" || m.costPrice == null) ? unitPrice : round2(m.costPrice);
+  DB.dispenses.push({ id:CONFIG.ID_PREFIXES.dispense + (DB.counters.dispense++), date:todayStr(), medId:m.id, name:m.name, qty:q, unitPrice:unitPrice, unitCost:unitCost, amount:round2(q*m.price) });
   saveDB(); renderAll();
 }
 
@@ -1614,6 +1690,17 @@ function renderReports(){
   el("repStatTotal").textContent = money(pc.total);
   el("repStatAppts").textContent = DB.appointments.filter(function(a){ return inPeriod(a.date, range); }).length;
   el("repStatLab").textContent = DB.labOrders.filter(function(o){ return inPeriod(o.date, range); }).length;
+  /* Pharmacy profit for the selected period — Admin only, like the
+     dashboard profit panel; hidden (and never filled) for other roles. */
+  var repProfitCard = el("repStatProfitCard");
+  if(repProfitCard){
+    if(isAdminUser()){
+      repProfitCard.style.display = "";
+      el("repStatProfit").textContent = money(range ? pharmacyProfit(range.from, range.to) : pharmacyProfit("0000-01-01", "9999-12-31"));
+    } else {
+      repProfitCard.style.display = "none";
+    }
+  }
   var rl = el("repRangeLabel");
   if(rl) rl.textContent = range ? ("Showing: " + range.from + " to " + range.to) : "Showing: all time";
   var daily = "", i, d, c;
@@ -1763,14 +1850,14 @@ function seedDemoData(){
                            doctorId:s[1].id, doctorName:s[1].name, date:t, token:tokenCount[key], status:s[2] });
   });
   [
-    { name:"Paracetamol 500mg", generic:"Acetaminophen", qty:240, price:0.10, expiry:"2027-03-31" },
-    { name:"Amoxicillin 250mg", generic:"Amoxicillin", qty:120, price:0.35, expiry:"2026-12-15" },
-    { name:"Ibuprofen 400mg", generic:"Ibuprofen", qty:8, price:0.15, expiry:"2027-01-31" },
-    { name:"Cetirizine 10mg", generic:"Cetirizine HCl", qty:180, price:0.08, expiry:"2027-06-30" },
-    { name:"Omeprazole 20mg", generic:"Omeprazole", qty:95, price:0.22, expiry:"2026-11-30" },
-    { name:"Vitamin D3 1000 IU", generic:"Cholecalciferol", qty:150, price:0.30, expiry:"2027-09-30" },
-    { name:"Cough Relief Syrup 100ml", generic:"Dextromethorphan", qty:40, price:2.50, expiry:"2025-08-31" },
-    { name:"Antiseptic Cream 30g", generic:"Chlorhexidine", qty:60, price:1.80, expiry:"2027-02-28" }
+    { name:"Paracetamol 500mg", generic:"Acetaminophen", qty:240, price:0.10, costPrice:0.07, expiry:"2027-03-31" },
+    { name:"Amoxicillin 250mg", generic:"Amoxicillin", qty:120, price:0.35, costPrice:0.25, expiry:"2026-12-15" },
+    { name:"Ibuprofen 400mg", generic:"Ibuprofen", qty:8, price:0.15, costPrice:0.11, expiry:"2027-01-31" },
+    { name:"Cetirizine 10mg", generic:"Cetirizine HCl", qty:180, price:0.08, costPrice:0.06, expiry:"2027-06-30" },
+    { name:"Omeprazole 20mg", generic:"Omeprazole", qty:95, price:0.22, costPrice:0.16, expiry:"2026-11-30" },
+    { name:"Vitamin D3 1000 IU", generic:"Cholecalciferol", qty:150, price:0.30, costPrice:0.22, expiry:"2027-09-30" },
+    { name:"Cough Relief Syrup 100ml", generic:"Dextromethorphan", qty:40, price:2.50, costPrice:1.80, expiry:"2025-08-31" },
+    { name:"Antiseptic Cream 30g", generic:"Chlorhexidine", qty:60, price:1.80, costPrice:1.30, expiry:"2027-02-28" }
   ].forEach(function(m){ m.id = CONFIG.ID_PREFIXES.med + (DB.counters.med++); DB.medicines.push(m); });
   var tests = [
     { name:"Complete Blood Count (CBC)", price:12 }, { name:"Fasting Blood Sugar", price:6 },
@@ -1787,8 +1874,8 @@ function seedDemoData(){
   DB.invoices.push({ id:CONFIG.ID_PREFIXES.invoice + (DB.counters.invoice++), date:t, patientId:pats[1].id, patientName:pats[1].name,
     doctorId:docs[1].id, doctorName:docs[1].name, fee:docs[1].fee, items:[{desc:tests[2].name, qty:1, price:tests[2].price}],
     discountPct:10, subtotal:inv2.subtotal, discount:inv2.discount, total:inv2.total, paid:30 });
-  DB.dispenses.push({ id:CONFIG.ID_PREFIXES.dispense + (DB.counters.dispense++), date:t, medId:DB.medicines[0].id, name:DB.medicines[0].name, qty:20, amount:round2(20*DB.medicines[0].price) });
-  DB.dispenses.push({ id:CONFIG.ID_PREFIXES.dispense + (DB.counters.dispense++), date:t, medId:DB.medicines[3].id, name:DB.medicines[3].name, qty:10, amount:round2(10*DB.medicines[3].price) });
+  DB.dispenses.push({ id:CONFIG.ID_PREFIXES.dispense + (DB.counters.dispense++), date:t, medId:DB.medicines[0].id, name:DB.medicines[0].name, qty:20, unitPrice:DB.medicines[0].price, unitCost:DB.medicines[0].costPrice, amount:round2(20*DB.medicines[0].price) });
+  DB.dispenses.push({ id:CONFIG.ID_PREFIXES.dispense + (DB.counters.dispense++), date:t, medId:DB.medicines[3].id, name:DB.medicines[3].name, qty:10, unitPrice:DB.medicines[3].price, unitCost:DB.medicines[3].costPrice, amount:round2(10*DB.medicines[3].price) });
   saveDB(); renderAll();
   alert("Demo data loaded. Explore the dashboard!");
 }
@@ -1825,7 +1912,7 @@ function init(){
   el("modalAlt").addEventListener("click", function(){ if(modalOnAlt) modalOnAlt(); });
   el("btnAddMed").addEventListener("click", openAddMedModal);
   el("btnQuickAdd").addEventListener("click", quickAddMed);
-  ["qaName", "qaPrice", "qaQty", "qaExpiry"].forEach(function(fid){
+  ["qaName", "qaPrice", "qaCost", "qaQty", "qaExpiry"].forEach(function(fid){
     el(fid).addEventListener("keydown", function(e){ if(e.key === "Enter"){ e.preventDefault(); quickAddMed(); } });
   });
   fillMedNameList();
